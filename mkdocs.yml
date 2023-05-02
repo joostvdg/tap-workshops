@@ -63,12 +63,14 @@ extra:
 # Extensions
 markdown_extensions:
   - abbr
+  - attr_list
   - footnotes
   - admonition
   - codehilite:
       linenums: true
       guess_lang: true
   - meta
+  - md_in_html
   - toc:
       permalink: true
   - pymdownx.arithmatex
