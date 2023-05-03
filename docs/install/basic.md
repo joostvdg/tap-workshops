@@ -129,7 +129,18 @@ Please install the [Cluster Essentials](https://docs.vmware.com/en/Cluster-Essen
 
 ### Configure Certificate Authority
 
-TODO: Crossplane Bundle / KAPP Controller ConfigMap
+While TAP supports configuring a Certificate Authority (CA) to be trusted by the TAP machinery (or [Workloads specifically](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform/1.5/tap/app-sso-service-operators-workload-trust-custom-ca.html)[^11]) this applies to when TAP is installed.
+
+To install TAP, we need to ensure that the KAPP Controller we install with the Cluster Essentials, also trusts our custom CA.
+
+When using a private registry, which we do, we need to create a Secret with a pre-defined name and structure.
+This [kapp-controller-config](https://carvel.dev/kapp-controller/docs/v0.43.2/controller-config/#controller-configuration-spec)[^12] Secret is expected to have the CA as Base64 encoded PEM in the field `caCerts`. Luckily, this is done with a single line via the [kubectl create secret](https://docs.vmware.com/en/Cluster-Essentials-for-VMware-Tanzu/1.5/cluster-essentials/deploy.html)[^4] command.
+
+```sh
+kubectl create secret generic kapp-controller-config \
+   --namespace kapp-controller \
+   --from-file caCerts=ca.crt
+```
 
 ## Choose TAP setup (profile, installation type)
 
@@ -269,7 +280,9 @@ Assume we have a internal Harbor registry, with the hostname `harbor.example.com
 We create a project in this Harbor instance called `tap`, and relocated the TAP packages to this project as `tap-packages`.
 
 The complete URL will now be: `harbor.example.com/tap/tap-packages:1.5.0`.
+
 And our environment variables will be:
+
 * `INSTALL_REGISTRY_REPO=tap`
 * `INSTALL_REGISTRY_HOSTNAME=harbor.example.com`
 * `TAP_VERSION=1.5.0`
@@ -302,6 +315,28 @@ This should return something like this:
 ```sh
   NAME                      SOURCE                                                                            STATUS
   tanzu-tap-repository      (imgpkg) harbor.services.h2o-2-9349.h2o.vmware.com/tap/tap-packages:1.5.0         Reconcile succeeded
+```
+
+### Configure Certificate Authority Bundle For Crossplane
+
+The use of external services via the [Bitnami Services](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform/1.5/tap/bitnami-services-tutorials-working-with-bitnami-services.html)[^14] feature relies on [Crossplane](https://www.crossplane.io/)[^15].
+
+Unfortunately, in the `1.5.0` release of TAP, the Crossplane package does not pickup the `shared.ca_cert_data` property.
+
+This means we must configure Crossplane ourselves.
+Crossplane expects [a ConfigMap with a ca-bundle property](https://docs.crossplane.io/knowledge-base/guides/self-signed-ca-certs/)[^13], which we later configure when installing TAP Profile.
+
+First, verify the `crossplane-system` namespace exists:
+
+```sh
+kubectl create namespace crossplane-system || true
+```
+
+And then create the ConfigMap with the expected name and value.
+
+```sh
+kubectl -n crossplane-system create cm ca-bundle-config \
+  --from-file=ca-bundle=ca.crt
 ```
 
 ## Review TAP packages configuration options
@@ -350,6 +385,7 @@ antrea.tanzu.vmware.com.1.7.2+vmware.1-tkg.1-advanced           antrea.tanzu.vmw
 capabilities.tanzu.vmware.com.0.28.1+vmware.1                   capabilities.tanzu.vmware.com                         0.28.1+vmware.1                 646h52m34s
 kube-vip-cloud-provider.tanzu.vmware.com.0.0.4+vmware.2-tkg.1   kube-vip-cloud-provider.tanzu.vmware.com              0.0.4+vmware.2-tkg.1            646h52m33s
 ...
+
 ```
 
 Eitherway, we now know the version of the TAP package available to us, `1.5.0`.
@@ -374,6 +410,7 @@ This results in a long list of possible values:
   image_policy_webhook                                                         object  Image Policy Webhook configuration
   learningcenter                                                               object  Learning Center configuration
   ...
+
 ```
 
 As you can probably tell, many of these values are not explained at this level.
@@ -635,6 +672,7 @@ The TAP TBS Dependencies package depends on CRDs that are installed by TAP. So w
 ## Install TAP Profile
 
 At this point, we have the following:
+
 * TAP Packages available in a local Image Registry
 * TAP TBS Dependencies available in a local Image Registry
 * A Namespace to install TAP into (the concention is `tap-install`)
@@ -643,6 +681,7 @@ At this point, we have the following:
 * Profile Template for our Profile of choice (`Full`)
 
 We now take the following steps:
+
 1. Generate a Profile config file from the YTT Template
 1. Install the TAP package
 1. Install the TBS Dependencies Package Repository
@@ -713,11 +752,7 @@ kubectl get app -n ${TAP_INSTALL_NAMESPACE}
 If there is an issue, you can debug the package installs via `kubectl` commands:
 
 ```sh
-export APP_NAME=tap
-```
-
-```sh
-kubectl describe app -n ${TAP_INSTALL_NAMESPACE} ${APP_NAME}
+kubectl describe app -n ${TAP_INSTALL_NAMESPACE} tap
 ```
 
 ### Determine TBS Version
@@ -811,12 +846,162 @@ CONDITIONS:         - type: ReconcileSucceeded
   message: ""
 ```
 
-## Install Test Workload
+## Install Test Application
 
 * explain workloads
 * CLI
 * namespace & namespace provisioner
 * ?
+
+One of the goals of TAP is to be flexible, to support the various ways people build and run applications.
+
+Cartographer's Supply Chains let you define any workflow you want for any kind of resource you can express in Kubernetes.
+
+While that is interesting, starting with the basics, we focus on the `batteries included` part.
+Which gives you three main workflows:
+
+* build an application
+* run an application
+* both build & run an application
+
+Each of the three Out-Of-The-Box (OOTB) Supply Chains comes with two `ClusterSupplyChain` CRs.
+
+* `x-image-to-url`
+* `source-x-to-url`
+
+The Source to Image journey is defined by the `Workload` CR.
+The Image to URL journey is defined by the `Deliverable` CR.
+
+When you start at the Source, the OOTB Supply Chains generate the `Deliverable` CR for you.
+
+To test if our TAP machinery works as intended, we'll stick to creating a `Workload` that uses the `source-to-url` Supply Chain.
+
+In order to the tools used by the Supply Chain to do their work, they need the appropriate Secrets and RBAC permissions.
+So we start with setting up a Developer Namespace.
+
+### Set Up Developer Namespace
+
+Starting with TAP 1.5, it includes a package called the [Namespace Provisioner](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform/1.5/tap/namespace-provisioner-about.html)[^10].
+
+This let's us configure Developer Namespaces by adding Label.
+
+```sh
+export TAP_DEVELOPER_NAMESPACE=dev
+```
+
+=== "Via kubectl"
+
+    ```sh
+    kubectl create namespace ${TAP_DEVELOPER_NAMESPACE}
+    
+    kubectl label namespace ${TAP_DEVELOPER_NAMESPACE} \
+      apps.tanzu.vmware.com/tap-ns=""
+    ```
+=== "Via Manifest"
+
+    ```sh
+    cat <<EOF > tap-dev-namespace.yaml
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      labels:
+        apps.tanzu.vmware.com/tap-ns: ""
+        kubernetes.io/metadata.name: ${TAP_DEVELOPER_NAMESPACE}
+      name: ${TAP_DEVELOPER_NAMESPACE}
+    EOF
+    ```
+
+    ```sh
+    kubectl apply -f tap-dev-namespace.yaml
+    ```
+
+If we wait a few moments, we can then see the Namespace contains Secrets and RoleBindings:
+
+```sh
+kubectl get secret,rolebinding -n $TAP_DEVELOPER_NAMESPACE
+```
+
+Which shows something like this:
+
+```sh
+NAME                            TYPE                             DATA   AGE
+secret/registries-credentials   kubernetes.io/dockerconfigjson   1      25d
+
+NAME                                                            ROLE                   AGE
+rolebinding.rbac.authorization.k8s.io/default-permit-workload   ClusterRole/workload   25d
+```
+
+### Create Workload
+
+Now that we have a Namespace to work in, we can define a Workload.
+
+We can then either use the CLI or the `Workload` CR to create our test workload.
+
+=== "Tanzu CLI"
+    ```sh
+    tanzu apps workload create smoke-app \
+      --git-repo https://github.com/sample-accelerators/tanzu-java-web-app.git \
+      --git-branch main \
+      --type web \
+      --label app.kubernetes.io/part-of=smoke-app \
+      --annotation autoscaling.knative.dev/minScale=1 \
+      --yes \
+      -n "$TAP_DEVELOPER_NAMESPACE"
+    ```
+=== "Kubernetes Manifest"
+    ```sh
+    echo "apiVersion: carto.run/v1alpha1
+    kind: Workload
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: smoke-app
+        apps.tanzu.vmware.com/workload-type: web
+      name: smoke-app
+      namespace: ${TAP_DEVELOPER_NAMESPACE}
+    spec:
+      params:
+      - name: annotations
+        value:
+          autoscaling.knative.dev/minScale: \"1\"
+      source:
+        git:
+          ref:
+            branch: main
+          url: https://github.com/sample-accelerators/tanzu-java-web-app.git
+    " > workload.yml
+    ```
+
+    ```sh
+    kubectl apply -f workload.yml
+    ```
+
+Use `kubectl wait` to wait for the app to be ready.
+
+```sh
+kubectl wait --for=condition=Ready Workload smoke-app --timeout=10m -n "$TAP_DEVELOPER_NAMESPACE"
+```
+
+### Verify Workload
+
+To see the logs:
+
+```sh
+tanzu apps workload tail smoke-app
+```
+
+To get the status:
+
+```sh
+tanzu apps workload get smoke-app
+```
+
+### Delete Workload
+
+And then we can delete our test workload if want to.
+
+```sh
+tanzu apps workload delete smoke-app -y -n "$TAP_DEVELOPER_NAMESPACE"
+```
 
 ## Links
 
@@ -829,3 +1014,9 @@ CONDITIONS:         - type: ReconcileSucceeded
 [^7]: [TAP 1.5 - Full profile example](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform/1.5/tap/install.html#full-profile-3)
 [^8]: [TAP 1.5 - Handle TBS Depencies](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform/1.5/tap/install.html#optional-additional-build-service-configurations-4)
 [^9]: [TAP 1.5 - Install TAP Package](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform/1.5/tap/install.html#install-your-tanzu-application-platform-package-5)
+[^10]: [TAP 1.5 - Namespace Provisioner](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform/1.5/tap/namespace-provisioner-about.html)
+[^11]: [TAP 1.5 - Trust CA for Workload specifically](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform/1.5/tap/app-sso-service-operators-workload-trust-custom-ca.html)
+[^12]: [KAPP Controller - Configure Controller to Trust custom CA](https://carvel.dev/kapp-controller/docs/v0.43.2/controller-config/#controller-configuration-spec)
+[^13]: [Crossplane - Configure Self-signed CA Certs support](https://docs.crossplane.io/knowledge-base/guides/self-signed-ca-certs/)
+[^14]: [TAP 1.5 - Bitnami Services](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform/1.5/tap/bitnami-services-tutorials-working-with-bitnami-services.html)
+[^15]: [Crossplane - The Cloud Native Control Plane Framework](https://www.crossplane.io/)

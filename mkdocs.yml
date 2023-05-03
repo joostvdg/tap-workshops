@@ -15,6 +15,7 @@ theme:
     - navigation.instant
     - navigation.tabs.sticky
     - content.code.annotate
+    - content.code.copy
   name: material
   language: 'en'
   icon:
@@ -63,27 +64,36 @@ extra:
 # Extensions
 markdown_extensions:
   - abbr
-  - attr_list
   - footnotes
   - admonition
   - codehilite:
       linenums: true
       guess_lang: true
   - meta
-  - md_in_html
+  - tables
   - toc:
       permalink: true
+      toc_depth: 2
   - pymdownx.arithmatex
   - pymdownx.betterem:
       smart_enable: all
   - pymdownx.caret
   - pymdownx.details
   - pymdownx.critic
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
   - pymdownx.inlinehilite
+  - pymdownx.snippets
   - pymdownx.magiclink
   - pymdownx.mark
   - pymdownx.smartsymbols
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true 
   - pymdownx.tasklist:
