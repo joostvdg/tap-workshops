@@ -952,10 +952,741 @@ While you could use the ClusterTemplate to run a Pod with specific commands, the
 
 > Tekton is an open-source cloud native CICD (Continuous Integration and Continuous Delivery/Deployment) solution
 
+We'll examine the core resources of Tekton and how to use them.
+So that later we can include them in our Cartographer Supply Chain.
 
+### Core Resources
+
+For those new to Tekton, here is a brief explanation of the core resources:
+
+* **Step**: definition of a command to execute in a container image, part of the Task definition
+* **Task**: template for a series of Steps with Workspaces, Outputs and (input) Parameters, more on those below
+* **TaskRun**: a one-time runtime instantiation of a Task with its Workspaces and Parameters defined
+* **Pipeline**: a template for a series of Tasks, with Workspaces and Parameters
+* **PipelineRun**: a one-time runtime instantiation of a Pipeline with its Workspaces and Parameters defined
+* **Workspace**: storage definition, essentially Kubernetes Volume definitions, conceptually in Task and Pipeline, specified in TaskRun and PipelineRun
+* **Results**: Tasks can have outputs, named Results, which is a way of exporting information from a Task into the Pipeline, so it can be used by other Tasks
+* **Params**: input parameters for a Task
+
+### Task & TaskRun
+
+A Tekton Task is a Kubernetes CR that contains one or more Steps, and lot of other [optional configuration](https://tekton.dev/docs/pipelines/tasks/)[^10].
+
+We will ignore most the optional configuration for now, and focus on the Steps.
+
+A Step has a `name`, `image`, and then either `args` and/or a `command` or a `script`, depending on the Image used.
+
+Below is an example of a Task using an Image to execute a shell command:
+
+```yaml title="resources/tekton/task/01-task-hello.yaml"
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: hello
+spec:
+  steps:
+    - name: echo
+      image: harbor.services.h2o-2-9349.h2o.vmware.com/library/alpine@sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda
+      script: |
+        #!/bin/sh
+        echo "Hello World"
+```
+
+You can add this to your cluster as follows:
+
+```sh
+kubectl apply -f resources/tekton/task/01-task-hello.yaml -n $DEV_NAMESPACE
+```
+
+You can verify it exists, by running:
+
+```sh
+kubectl get task -n $DEV_NAMESPACE
+```
+
+Which returns something like this:
+
+```sh
+NAME            AGE
+hello           24h
+```
+
+You might wonder, now what?
+
+Nothing, a Task is a template, it doesn't do anything by itself.
+
+For that we need either a PipelineRun (when the Task is part of a Pipeline) or a **TaskRun**.
+
+A TaskRun refers to a Task, satisfies its requirements and then instantiates a version of that Task.
+
+In our case, a TaskRun looks like this:
+
+```yaml title="resources/tekton/task/02-task-run.yaml"
+apiVersion: tekton.dev/v1beta1
+kind: TaskRun
+metadata:
+  name: hello-task-run
+spec:
+  taskRef:
+    name: hello
+```
+
+We can add this to the cluster as follows:
+
+```sh
+kubectl apply -f resources/tekton/task/02-task-run.yaml -n $DEV_NAMESPACE
+```
+
+And then verify its status:
+
+```sh
+kubectl get taskrun -n $DEV_NAMESPACE
+```
+
+Which initially returns this:
+
+```sh
+NAME                                         SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
+hello-task-run                               Unknown     Pending     5s
+```
+
+And then this:
+
+```sh
+NAME                                         SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
+hello-task-run                               True        Succeeded   53s         47s
+```
+
+Because our TaskRun has a fixed name, we can loot at the Pod and request the logs of the container.
+The container is named after the step, so our step `echo` becomes `step-echo`:
+
+```sh
+kubectl -n ${DEV_NAMESPACE} logs hello-task-run-pod -c step-echo
+```
+
+Which should return the following:
+
+```sh
+Hello World
+```
+
+Feel free to clean them up:
+
+```sh
+kubectl delete -f resources/tekton/task/02-task-run.yaml -n $DEV_NAMESPACE
+kubectl delete -f resources/tekton/task/01-task-hello.yaml -n $DEV_NAMESPACE
+```
+
+Let us look at Pipeline and PipelineRun next.
+
+### Pipeline & PipelineRun
+
+Having a single Task with a fixed named TaskRun is a bit limiting.
+
+If you need to support more flows, workspaces, some logic, or want to re-use existing Tasks you need a Pipeline.
+
+A [Tekton Pipeline](https://tekton.dev/docs/pipelines/pipelines/)[^11] is a collection of Tasks with inputs, outputs, workspaces and built-in logic for CI/CD workflows.
+
+We won't go into too much detail, but feel free to explore the options a Pipeline offers[^11].
+
+For now, we'll stick the ability to combine a series of Tasks and supply them with their requirements (e.g., input parameters).
+
+```yaml
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: hello-goodbye
+spec:
+  params: []
+  tasks: []
+```
+
+That's our Pipeline skeleton, let us add some tasks to it:
+
+```yaml
+spec:
+  tasks:
+    - name: hello
+      taskRef:
+        name: hello
+    - name: goodbye
+      runAfter:
+        - hello
+      taskRef:
+        name: goodbye
+      params:
+      - name: username
+        value: $(params.username)
+```
+
+As you can see, we can re-use our `hello` Task.
+And there's is a new Task, called `goodbye`.
+
+There are two new things here:
+
+* `runAfter`: Tasks might rely on outputs (Results) from other tasks, or have a logical sequential order, so we can specify Task B runs after Task A completed (successfully)
+* `params`: our second Task, `goodbye`, requires an input parameter named `username`
+
+As you can see in the `params` section of the `goodbye` Task, we supply it a value from the Pipeline `params` object.
+Let's add that to our Pipeline:
+
+```yaml
+spec:
+  params:
+  - name: username
+    type: string
+```
+
+Our Pipeline now looks like this:
+
+```yaml title="resources/tekton/pipeline/03-pipeline.yaml"
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: hello-goodbye
+spec:
+  params:
+  - name: username
+    type: string
+  tasks:
+    - name: hello
+      taskRef:
+        name: hello
+    - name: goodbye
+      runAfter:
+        - hello
+      taskRef:
+        name: goodbye
+      params:
+      - name: username
+        value: $(params.username)
+```
+
+We can add our two Tasks and the Pipeline to the cluster, and Tekton verifies all Tasks are accounted for.
+
+```sh
+kubectl apply -f resources/tekton/pipeline/01-task-hello.yaml -n $DEV_NAMESPACE
+kubectl apply -f resources/tekton/pipeline/02-task-goodbye.yaml -n $DEV_NAMESPACE
+kubectl apply -f resources/tekton/pipeline/03-pipeline.yaml -n $DEV_NAMESPACE
+```
+
+And verify the Pipeline is healthy:
+
+```sh
+kubectl get pipeline -n $DEV_NAMESPACE
+```
+
+Which should result in:
+
+```sh
+NAME                 AGE
+hello-goodbye        24h
+```
+
+Now that we have a Pipeline, we have to ***Run*** it.
+It is probably not a surpise we do this via a **PipelineRun**.
+
+Ignoring all the other bells and whistles Tekton offers, instantiating a Pipeline is straightforward.
+We create a **PipelineRun** manifest, reference the **Pipeline** and supply it its requirements (e.g., `params`).
+
+```yaml title="resources/tekton/pipeline/04-pipeline-run-static.yaml"
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  name: hello-goodbye-run
+spec:
+  pipelineRef:
+    name: hello-goodbye
+  params:
+  - name: username
+    value: "Tekton"
+```
+
+As you can see, we refer to our Pipeline via `pipelineRef.name`.
+And we supply the input parameters via `params`.
+
+Let's apply this to the cluster, and initiate our first Pipeline ***Run***.
+
+```sh
+kubectl apply -f resources/tekton/pipeline/04-pipeline-run-static.yaml -n $DEV_NAMESPACE
+```
+
+And verify the state:
+
+```sh
+kubectl get pipelinerun -n $DEV_NAMESPACE
+```
+
+Which should yield something like this at first:
+
+```sh
+NAME                           SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
+hello-goodbye-run              Unknown     Running     6s
+```
+
+And then:
+
+```sh
+NAME                           SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
+hello-goodbye-run              True        Succeeded   64s         45s
+```
+
+And if we look for the TaskRuns:
+
+```sh
+kubectl get taskrun -n $DEV_NAMESPACE
+```
+
+We should see the following
+
+```sh
+NAME                                         SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
+hello-goodbye-run-goodbye                    True        Succeeded   76s         63s
+hello-goodbye-run-hello                      True        Succeeded   82s         76s
+```
+
+There is a downside to running Pipelines like this, we can not have more than one Run.
+
+The simple solution to this, is the replace the `metadata.name` property by `metadata.generateName`.
+Where the convention is to end in a `-`, so a generated hash is included.
+
+```yaml title="resources/tekton/pipeline/05-pipeline-run-dynamic.yaml"
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: hello-goodbye-run-
+spec:
+  pipelineRef:
+    name: hello-goodbye
+  params:
+  - name: username
+    value: "Tekton"
+```
+
+We cannot apply this resource to the cluster, we have to use `kubectl create` instead (because of the `generatedName`):
+
+```sh
+kubectl create -f  resources/tekton/pipeline/05-pipeline-run-dynamic.yaml -n $DEV_NAMESPACE
+```
+
+If we now look at the PipelineRun and TaskRuns:
+
+```sh
+kubectl get taskrun,pipelinerun -n $DEV_NAMESPACE
+```
+
+We get the following:
+
+```sh
+NAME                                                            SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
+taskrun.tekton.dev/hello-goodbye-run-goodbye                    True        Succeeded   6m54s       6m41s
+taskrun.tekton.dev/hello-goodbye-run-hello                      True        Succeeded   7m          6m54s
+taskrun.tekton.dev/hello-goodbye-run-vhswg-goodbye              True        Succeeded   29s         21s
+taskrun.tekton.dev/hello-goodbye-run-vhswg-hello                True        Succeeded   36s         29s
+
+NAME                                                  SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
+pipelinerun.tekton.dev/hello-goodbye-run              True        Succeeded   7m          6m41s
+pipelinerun.tekton.dev/hello-goodbye-run-vhswg        True        Succeeded   36s         21s
+```
+
+The Run objects now include a hash in their name, allowing more than one to exists at once.
 
 ## Tekton Pipeline With Workspace
 
+One common thing CI/CD Pipelines share, is the need to share data between Tasks.
+For example, you might have a Git Clone task to collect your source code, and then re-use that in the rest of the pipeline.
+
+Before going into how we work with Workspaces, let's highlight another concept.
+Tasks are re-usable templates, as such, there is a large collection of them maintained by the community.
+This is called the [Tekton Catalog](https://github.com/tektoncd/catalog/tree/main/task)[^12], in which you'll find common tasks such a GitClone, building an Image with Kaniko and so on.
+
+### Setting Up The Tasks
+
+We will re-use the existing [GitClone Task](https://github.com/tektoncd/catalog/tree/main/task/git-clone)[^13], although with one minor modification.
+
+Which is included in the resources:
+
+```sh
+kubectl apply -f resources/tekton/pipeline-w-workspace/02-task-git-clone-0.10.yaml -n $DEV_NAMESPACE
+```
+
+This Task let's us Clone a Git repository, with practically all common Git clone configuration options.
+
+It defines a list of Workspaces:
+
+```yaml
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: git-clone
+spec:
+  workspaces:
+    - name: output
+      description: The git repo will be cloned onto the volume backing this Workspace.
+    - name: ssh-directory
+      optional: true
+      description: |
+        A .ssh directory with private key, known_hosts, config, etc. Copied to
+        the user's home before git commands are executed. Used to authenticate
+        with the git remote when performing the clone. Binding a Secret to this
+        Workspace is strongly recommended over other volume types.
+    - name: basic-auth
+      optional: true
+      description: |
+        A Workspace containing a .gitconfig and .git-credentials file. These
+        will be copied to the user's home before any git commands are run. Any
+        other files in this Workspace are ignored. It is strongly recommended
+        to use ssh-directory over basic-auth whenever possible and to bind a
+        Secret to this Workspace over other volume types.
+    - name: ssl-ca-directory
+      optional: true
+      description: |
+        A workspace containing CA certificates, this will be used by Git to
+        verify the peer with when fetching or pushing over HTTPS.
+```
+
+Most of which have `optional: true`, except for `output`.
+Which means we'll need to supply that in our **Pipeline** later.
+
+It also has many paramaters, of which `url` and `revision` are required.
+We'll need to supply those as well.
+
+Next up is a Task that uses this Git checkout, to determine the next Git tag (e.g., application's release version).
+
+```sh
+kubectl apply -f resources/tekton/pipeline-w-workspace/01-task-git-next-tag.yaml -n $DEV_NAMESPACE
+```
+
+This task also required a Workspace:
+
+```yaml
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: git-next-tag
+spec:
+  workspaces:
+    - name: source
+```
+
+It requires one parameter, `base`, which is the SemVer base (e.g., `1.0.*`).
+
+And it provided an Output:
+
+```yaml
+spec:
+  results:
+    - name: NEXT_TAG
+      description: Next version for Git Tag.
+```
+
+We'll look at this result later.
+
+### Creating the Pipeline with Workspace
+
+So far, our two Tasks have a "shopping list" of required items:
+
+* Workspace (`source` for git-next-tag, and `output` for git-clone)
+* Parameters: (Git) `url`, (Git) `revision`, and (SemVer Tag) `base`
+
+This is how our Pipeline looks like, satisfying those requirements:
+
+```yaml
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: clone-git-next-tag
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: base
+      type: string
+    - name: gitrevision
+  workspaces:
+    - name: shared-data
+```
+
+Next, we add the Tasks and configure their requirements via these properties:
+
+```yaml
+spec:
+  tasks:
+    - name: fetch-source
+      taskRef:
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: shared-data
+      params:
+        - name: url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.gitrevision)
+    - name: git-next-tag
+      runAfter: ["fetch-source"]
+      taskRef:
+        name: git-next-tag
+      workspaces:
+        - name: source
+          workspace: shared-data
+      params:
+        - name: base
+          value: $(params.base)
+```
+
+As you might have spotted, we re-use the Workspace.
+Supplying the same single Workspace we defined in the Pipeline to both Tasks!
+
+This is intended, else we can't re-use our Git clone.
+
+Apply the Pipeline to the cluster.
+
+```sh
+kubectl apply -f resources/tekton/pipeline-w-workspace/03-pipeline.yaml -n $DEV_NAMESPACE
+```
+
+??? Example "Complete Pipeline Example"
+
+    ```yaml title="resources/tekton/pipeline-w-workspace/03-pipeline.yaml"
+    apiVersion: tekton.dev/v1beta1
+    kind: Pipeline
+    metadata:
+      name: clone-git-next-tag
+    spec:
+      description: |
+        This pipeline clones a git repo, then echoes the README file to the stdout.
+      params:
+        - name: repo-url
+          type: string
+          description: The git repo URL to clone from.
+        - name: base
+          description: version Base to query Git tags for (e.g., v2.1.*)
+          type: string
+        - name: gitrevision
+          description: git revision to checkout
+      workspaces:
+        - name: shared-data
+          description: |
+            This workspace contains the cloned repo files, so they can be read by the
+            next task.
+      tasks:
+        - name: fetch-source
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: shared-data
+          params:
+            - name: url
+              value: $(params.repo-url)
+            - name: revision
+              value: $(params.gitrevision)
+        - name: git-next-tag
+          runAfter: ["fetch-source"]
+          taskRef:
+            name: git-next-tag
+          workspaces:
+            - name: source
+              workspace: shared-data
+          params:
+            - name: base
+              value: $(params.base)
+    ```
+
+### Create the PipelineRun
+
+To instantiate our Pipeline, we'll create a PipelineRun.
+
+In this PipelineRun, we need to do the following:
+
+* reference the Pipeline
+* supply a Workspace
+* supply the Parameters
+
+To make it re-usable, we'll start with a `generateName` style:
+
+```yaml
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: clone-git-next-tag-run-
+```
+
+To ensure all containers can read the filesystem of the volume, we set a specific `fsGroup`:
+
+```sh
+spec:
+  podTemplate:
+    securityContext:
+      fsGroup: 65532
+```
+
+And then we create a Workspace via a `volumeClaimTemplate`:
+
+```yaml
+spec:
+  workspaces:
+    - name: shared-data
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 50Mi
+          volumeMode: Filesystem
+```
+
+Note, the name `shared-data` is the name specified in the Pipeline.
+The Pipeline definition ensures each Task gets it supplied as however it named it.
+
+And the parameters:
+
+```yaml
+spec:
+  params:
+    - name: repo-url
+      value: https://github.com/joostvdg/go-demo.git
+    - name: base
+      value: "v2.1"
+    - name: gitrevision
+      value: main
+```
+
+??? Example "Full PipelineRun Example"
+
+    ```yaml
+    apiVersion: tekton.dev/v1beta1
+    kind: PipelineRun
+    metadata:
+      generateName: clone-git-next-tag-run-
+    spec:
+      pipelineRef:
+        name: clone-git-next-tag
+      podTemplate:
+        securityContext:
+          fsGroup: 65532
+      workspaces:
+        - name: shared-data
+          volumeClaimTemplate:
+            spec:
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 50Mi
+              volumeMode: Filesystem
+      params:
+        - name: repo-url
+          value: https://github.com/joostvdg/go-demo.git
+        - name: base
+          value: "v2.1"
+        - name: gitrevision
+          value: main
+    ```
+
+### Excercise 4
+
+```sh
+export DEV_NAMESPACE=dev
+```
+
+Just in case you haven't applied all files yet, here's the whole list again:
+
+```sh
+kubectl apply -f resources/tekton/pipeline-w-workspace/02-task-git-clone-0.10.yaml -n $DEV_NAMESPACE
+kubectl apply -f resources/tekton/pipeline-w-workspace/01-task-git-next-tag.yaml -n $DEV_NAMESPACE
+kubectl apply -f resources/tekton/pipeline-w-workspace/03-pipeline.yaml -n $DEV_NAMESPACE
+```
+
+Verify the Pipeline is valid, and then create the PipelineRun:
+
+```sh
+kubectl create -f resources/tekton/pipeline-w-workspace/04-pipeline-run.yaml -n $DEV_NAMESPACE
+```
+
+Once created, you can verify the status:
+
+```sh
+kubectl get taskrun,pipelinerun -n $DEV_NAMESPACE
+```
+
+If you want the logs, you'll now have to find the appropriate Pod name, as its name is generated.
+
+```sh
+kubectl get pod  -n ${DEV_NAMESPACE}
+```
+
+```sh
+POD_NAME=
+```
+
+```sh
+kubectl -n ${DEV_NAMESPACE} logs ${POD_NAME}
+```
+
+You can also use the (automatic) Labels to query them:
+
+```sh
+kubectl get taskrun -n dev -l tekton.dev/task=git-next-tag
+```
+
+And then you can find the output of the `Result` from the `git-next-tag` Task in its `status.taskResults` field:
+
+```sh
+kubectl get taskrun -n dev -l tekton.dev/task=git-next-tag -ojson | jq '.items | map(.status.taskResults)'
+```
+
+## Tekton In Supply Chain
+
+
+!!! Info
+
+    In case you are wondering how this hierarchy now looks:
+
+    ```sh
+    * ClusterSupplyChain
+      * ClusterSourceTemplate
+        * ClusterRunTemplate
+          * PipelineRun
+            * Task
+              * TaskRun (Generated)
+                * Pod (Generated)
+                  * InitContainer -> Shell (Generated)
+    ```
+
+## OOTB Pipeline Appendix
+
+!!! Warning "Source in TAP"
+    In TAP, we don't have to clone our sources from Git, we can download them from FluxCD.
+
+    The way TAP works, it that the trigger for a SupplyChain goes through FluxCD's GitRepository management.
+    So below is a way of codifying that process into a Tekton Task:
+
+    ```yaml
+    apiVersion: tekton.dev/v1beta1
+    kind: Task
+    metadata:
+      name: fluxcd-repo-download
+    spec:
+      params:
+        - name: source-url
+          type: string
+          description: |
+            the source url to download the code from, 
+            in the form of a FluxCD repository checkout .tar.gz
+      workspaces:
+        - name: output
+          description: The git repo will be cloned onto the volume backing this Workspace.
+      steps:
+        - name: download-source
+          image: public.ecr.aws/docker/library/gradle:jdk17-focal
+          script: |
+            #!/usr/bin/env sh
+            cd $(workspaces.output.path)
+            wget -qO- $(params.source-url) | tar xvz -m
+    ```
 
 
 ## References
@@ -969,6 +1700,11 @@ While you could use the ClusterTemplate to run a Pod with specific commands, the
 [^7]: [KPack - Kubernetes solution for running Cloud Native Buildpacks](https://buildpacks.io/docs/tools/kpack/)
 [^8]: [Cloud Native Build Packs](https://buildpacks.io/)
 [^9]: [Tekton - Open-source cloud native CICD](https://tekton.dev/docs/getting-started/)
-[^10]: []()
-[^11]: []()
-[^12]: []()
+[^10]: [Tekton - Task details](https://tekton.dev/docs/pipelines/tasks/)
+[^11]: [Tekton - Pipeline details](https://tekton.dev/docs/pipelines/pipelines/)
+[^12]: [Tekton - Task Catalog](https://github.com/tektoncd/catalog/tree/main/task)
+[^13]: [Tekton Catalog - GitClone Task](https://github.com/tektoncd/catalog/tree/main/task/git-clone)
+[^14]: []()
+[^15]: []()
+[^16]: []()
+
