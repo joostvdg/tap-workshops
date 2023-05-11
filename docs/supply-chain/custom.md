@@ -691,7 +691,7 @@ imagePath: .status.latestImage
         - name: image_prefix
           default: harbor.services.h2o-2-9349.h2o.vmware.com/tap-apps/test
       imagePath: .status.latestImage
-```
+    ```
 
 ### Update Cluster Template
 
@@ -1046,15 +1046,15 @@ kubectl get taskrun -n $DEV_NAMESPACE
 Which initially returns this:
 
 ```sh
-NAME                                         SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
-hello-task-run                               Unknown     Pending     5s
+NAME              SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
+hello-task-run    Unknown     Pending     5s
 ```
 
 And then this:
 
 ```sh
-NAME                                         SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
-hello-task-run                               True        Succeeded   53s         47s
+NAME              SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
+hello-task-run    True        Succeeded   53s         47s
 ```
 
 Because our TaskRun has a fixed name, we can loot at the Pod and request the logs of the container.
@@ -1208,7 +1208,9 @@ And we supply the input parameters via `params`.
 Let's apply this to the cluster, and initiate our first Pipeline ***Run***.
 
 ```sh
-kubectl apply -f resources/tekton/pipeline/04-pipeline-run-static.yaml -n $DEV_NAMESPACE
+kubectl apply \
+  -f resources/tekton/pipeline/04-pipeline-run-static.yaml \
+  -n $DEV_NAMESPACE
 ```
 
 And verify the state:
@@ -1240,9 +1242,9 @@ kubectl get taskrun -n $DEV_NAMESPACE
 We should see the following
 
 ```sh
-NAME                                         SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
-hello-goodbye-run-goodbye                    True        Succeeded   76s         63s
-hello-goodbye-run-hello                      True        Succeeded   82s         76s
+NAME                           SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
+hello-goodbye-run-goodbye      True        Succeeded   76s         63s
+hello-goodbye-run-hello        True        Succeeded   82s         76s
 ```
 
 There is a downside to running Pipelines like this, we can not have more than one Run.
@@ -1307,7 +1309,9 @@ We will re-use the existing [GitClone Task](https://github.com/tektoncd/catalog/
 Which is included in the resources:
 
 ```sh
-kubectl apply -f resources/tekton/pipeline-w-workspace/02-task-git-clone-0.10.yaml -n $DEV_NAMESPACE
+kubectl apply \
+  -f resources/tekton/pipeline-w-workspace/02-task-git-clone-0.10.yaml \
+  -n $DEV_NAMESPACE
 ```
 
 This Task let's us Clone a Git repository, with practically all common Git clone configuration options.
@@ -1443,7 +1447,9 @@ This is intended, else we can't re-use our Git clone.
 Apply the Pipeline to the cluster.
 
 ```sh
-kubectl apply -f resources/tekton/pipeline-w-workspace/03-pipeline.yaml -n $DEV_NAMESPACE
+kubectl apply \
+  -f resources/tekton/pipeline-w-workspace/03-pipeline.yaml \
+  -n $DEV_NAMESPACE
 ```
 
 ??? Example "Complete Pipeline Example"
@@ -1603,7 +1609,9 @@ kubectl apply -f resources/tekton/pipeline-w-workspace/03-pipeline.yaml -n $DEV_
 Verify the Pipeline is valid, and then create the PipelineRun:
 
 ```sh
-kubectl create -f resources/tekton/pipeline-w-workspace/04-pipeline-run.yaml -n $DEV_NAMESPACE
+kubectl create \
+  -f resources/tekton/pipeline-w-workspace/04-pipeline-run.yaml \
+  -n $DEV_NAMESPACE
 ```
 
 Once created, you can verify the status:
@@ -1635,11 +1643,564 @@ kubectl get taskrun -n dev -l tekton.dev/task=git-next-tag
 And then you can find the output of the `Result` from the `git-next-tag` Task in its `status.taskResults` field:
 
 ```sh
-kubectl get taskrun -n dev -l tekton.dev/task=git-next-tag -ojson | jq '.items | map(.status.taskResults)'
+kubectl get taskrun -n dev \
+  -l tekton.dev/task=git-next-tag -ojson \
+  | jq '.items | map(.status.taskResults)'
 ```
 
 ## Tekton In Supply Chain
 
+Now that we know how to build a Cartographer Supply Chain and a Tekton Pipeline, let's combine the two!
+
+As with the other steps, we're reusing an [existing tutorial](https://cartographer.sh/docs/v0.7.0/tutorials/lifecycle/)[^14].
+
+The goal is to create a Supply Chain that validates source code, then builds an Image and then deploys that Image.
+
+It is in the Source Code Validation step we'll use Tekton.
+
+### Tekton Task Markdown Lint
+
+The Markdown Lint Task is [available in the Tekton Catalog](https://github.com/tektoncd/catalog/tree/main/task/markdown-lint/0.1)[^15], and only needs a Workspace to do its work.
+
+```yaml
+workspaces:
+  - name: shared-workspace
+    description: A workspace that contains the fetched git repository.
+```
+
+The task doesn't contain anything new, so we'll go on to the Pipeline.
+
+??? Example "Markdown Lint Task"
+
+    ```yaml title="resources/cartographer/app-deploy-04/01-tekton-task-markdown-lint-0.1.yaml"
+    apiVersion: tekton.dev/v1beta1
+    kind: Task
+    metadata:
+      name: markdown-lint
+      labels:
+        app.kubernetes.io/version: "0.1"
+      annotations:
+        tekton.dev/pipelines.minVersion: "0.12.1"
+        tekton.dev/categories: Code Quality
+        tekton.dev/tags: linter
+        tekton.dev/displayName: "Markdown linter"
+        tekton.dev/platforms: "linux/amd64"
+    spec:
+      description: >-
+        This task can be used to perform lint check on Markdown files
+      workspaces:
+        - name: shared-workspace
+          description: A workspace that contains the fetched git repository.
+      params:
+        - name: args
+          type: array
+          description: extra args needs to append
+          default: ["--help"]
+      steps:
+        - name: lint-markdown-files
+          image: harbor.services.h2o-2-9349.h2o.vmware.com/other/markdownlint@sha256:399a199c92f89f42cf3a0a1159bd86ca5cdc293fcfd39f87c0669ddee9767724 #tag: 0.11.0
+          workingDir: $(workspaces.shared-workspace.path)
+          command:
+            - mdl
+          args:
+            - $(params.args)
+    ```
+
+!!! Info
+    You might be wondering: "If they are all available in the Catalog, why not use them from there?".
+
+    Which is a valid question to ask. 
+    The answer: the images used are relocated and the Task in the resources uses that relocated Image.
+
+### Tekton Pipeline
+
+The Pipeline uses two tasks. The Markdown Lint[^15] Task and the [Git Clone](https://github.com/tektoncd/catalog/tree/main/task/git-clone/0.3)[^16] Task.
+The tutorial uses Git Clone version `0.3`, so we've included that in the Resources.
+
+As the Markdown Lint task requires the Source Code, it has to run after the Git Clone (i.e., `fetch-repository`) Task.
+
+```yaml
+spec:
+  tasks:
+    - name: fetch-repository
+      taskRef:
+        name: git-clone
+    - name: md-lint-run
+      taskRef:
+        name: markdown-lint
+      runAfter:
+        - fetch-repository
+```
+
+As with our previous Pipeline, we need to supply the Git Repository URL and the (Git) Revision.
+So we specify appropriate `params` at `spec.params` for the Pipeline.
+
+We also have to specify a Workspace, which is then given to both tasks.
+
+```yaml
+spec:
+  params:
+    - name: repository
+      type: string
+    - name: revision
+      type: string
+  workspaces:
+    - name: shared-workspace
+```
+
+We then make sure the Workspace and the Parameters are applied to the Tasks.
+
+See the complete example below.
+
+??? Example "Complete Pipeline Example"
+
+    ```yaml title="resources/cartographer/app-deploy-04/02-tekton-pipeline-markdown-lint.yaml"
+    apiVersion: tekton.dev/v1beta1
+    kind: Pipeline
+    metadata:
+      name: linter-pipeline
+    spec:
+      params:
+        - name: repository
+          type: string
+        - name: revision
+          type: string
+      workspaces:
+        - name: shared-workspace
+      tasks:
+        - name: fetch-repository
+          taskRef:
+            name: git-clone
+          workspaces:
+            - name: output
+              workspace: shared-workspace
+          params:
+            - name: url
+              value: $(params.repository)
+            - name: revision
+              value: $(params.revision)
+            - name: subdirectory
+              value: ""
+            - name: deleteExisting
+              value: "true"
+        - name: md-lint-run #lint markdown
+          taskRef:
+            name: markdown-lint
+          runAfter:
+            - fetch-repository
+          workspaces:
+            - name: shared-workspace
+              workspace: shared-workspace
+          params:
+            - name: args
+              value: ["."]
+    ```
+
+### Tekton PipelineRun in Cartographer
+
+For Cartographer to instantiate a Tekton Pipeline, it needs to produce a PipelineRun.
+
+As you probably expect by now, we use one of the Template types of Cartographer.
+
+Perhaps a bit counterintuitive, but as the Pipeline does a Git checkout we use the `ClusterSourceTemplate`.
+
+```yaml
+apiVersion: carto.run/v1alpha1
+kind: ClusterSourceTemplate
+metadata:
+  name: source-linter
+spec:
+  template: {}
+```
+
+The Supply Chain runs more than once.
+In order for that to work well with the Tekton resources we need to do the following:
+
+* use the `metadata.generateName` way of naming the Tekton resources
+* set the **ClusterSourceTemplate**'s `lifecycle` property to `tekton`
+
+```yaml
+spec:
+  lifecycle: tekton
+```
+
+In the `spec.template`, we write the **PipelineRun**.
+
+```yaml
+spec:
+  template:
+    apiVersion: tekton.dev/v1beta1
+    kind: PipelineRun
+    metadata:
+      generateName: linter-pipeline-run-
+    spec:
+      pipelineRef:
+        name: linter-pipeline
+```
+
+Our Pipeline requires a Workspace, which we'll define in the way we've done before:
+
+```yaml
+spec:
+  template:
+    apiVersion: tekton.dev/v1beta1
+    kind: PipelineRun
+    spec:
+      workspaces:
+        - name: shared-workspace
+          volumeClaimTemplate:
+            spec:
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 256Mi
+```
+
+The Pipeline also requires two parameters.
+The Git Repository URL (`repository`) and Revision (`revision`).
+
+```yaml
+spec:
+  template:
+    apiVersion: tekton.dev/v1beta1
+    kind: PipelineRun
+    spec:
+      params:
+        - name: repository
+          value: $(workload.spec.source.git.url)$
+        - name: revision
+          value: $(workload.spec.source.git.ref.branch)$
+```
+
+Here there is a change.
+
+We specify the Parameters so they are copied from the **Workload**.
+
+The **ClusterSourceTemplate** also expects to ouput the Source URL and Revision.
+Which also allows us to show how you retrieve values from the Tekton PipelineRun.
+
+```yaml
+spec:
+  urlPath: .status.pipelineSpec.tasks[0].params[0].value
+  revisionPath: .status.pipelineSpec.tasks[0].params[1].value
+```
+
+That is our ClusterSourceTemplate.
+
+??? Example "Complete ClusterSourceTemplate"
+
+    ```yaml title="resources/cartographer/app-deploy-04/03-cluster-source-template.yaml"
+    apiVersion: carto.run/v1alpha1
+    kind: ClusterSourceTemplate
+    metadata:
+      name: source-linter
+    spec:
+      template:
+        apiVersion: tekton.dev/v1beta1
+        kind: PipelineRun
+        metadata:
+          generateName: linter-pipeline-run-
+        spec:
+          pipelineRef:
+            name: linter-pipeline
+          params:
+            - name: repository
+              value: $(workload.spec.source.git.url)$
+            - name: revision
+              value: $(workload.spec.source.git.ref.branch)$
+          workspaces:
+            - name: shared-workspace
+              volumeClaimTemplate:
+                spec:
+                  accessModes:
+                    - ReadWriteOnce
+                  resources:
+                    requests:
+                      storage: 256Mi
+      urlPath: .status.pipelineSpec.tasks[0].params[0].value
+      revisionPath: .status.pipelineSpec.tasks[0].params[1].value
+      lifecycle: tekton
+    ```
+
+### Image Building Templates
+
+As we're extending the previous Supply Chain, we're reusing the templates from before.
+Namely, the **ClusterTemplate** and the **ClusterImageTemplate**.
+
+As you probably expect from me, I've renamed them, so they can be used next to the other ones.
+
+```yaml
+apiVersion: carto.run/v1alpha1
+kind: ClusterTemplate
+metadata:
+  name: app-deploy-from-sc-image-04
+```
+
+And:
+
+```yaml
+apiVersion: carto.run/v1alpha1
+kind: ClusterImageTemplate
+metadata:
+  name: image-builder-04
+```
+
+For the rest they are the same.
+
+??? Example "Complete Templates"
+
+    ```yaml title="resources/cartographer/app-deploy-04/04-cluster-template.yaml"
+    apiVersion: carto.run/v1alpha1
+    kind: ClusterTemplate
+    metadata:
+      name: app-deploy-from-sc-image-04
+    spec:
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: $(workload.metadata.name)$-deployment
+          labels:
+            app: $(workload.metadata.name)$
+        spec:
+          replicas: 3
+          selector:
+            matchLabels:
+              app: $(workload.metadata.name)$
+          template:
+            metadata:
+              labels:
+                app: $(workload.metadata.name)$
+            spec:
+              containers:
+                - name: $(workload.metadata.name)$
+                  image: $(images.built-image.image)$
+                  env:
+                    - name: $(params.env_key)$
+                      value: $(params.env_value)$
+      params:
+        - name: env_key
+          default: "FOO"
+        - name: env_value
+          default: "BAR"
+
+    ---
+    apiVersion: carto.run/v1alpha1
+    kind: ClusterImageTemplate
+    metadata:
+      name: image-builder-04
+    spec:
+      template:
+        apiVersion: kpack.io/v1alpha2
+        kind: Image
+        metadata:
+          name: $(workload.metadata.name)$
+        spec:
+          tag: $(params.image_prefix)$$(workload.metadata.name)$
+          builder:
+            kind: ClusterBuilder
+            name: tiny
+          source:
+            git:
+              url: $(workload.spec.source.git.url)$
+              revision: $(workload.spec.source.git.ref.branch)$
+      params:
+        - name: image_prefix
+          default: harbor.services.h2o-2-9349.h2o.vmware.com/tap-apps/test
+      imagePath: .status.latestImage
+    ```
+
+### Update Supply Chain
+
+We're almost there, let's update (and rename) the Supply Chain.
+
+```yaml
+apiVersion: carto.run/v1alpha1
+kind: ClusterSupplyChain
+metadata:
+  name: source-code-supply-chain-04
+spec:
+  selector:
+    workload-type: source-code-04
+```
+
+We now have three resources:
+
+* **ClusterSourceTemplate**: the Tekton PipelineRun
+* **ClusterImageTemplate**: our KPack Image build
+* **ClusterTemplate**: our deployment
+
+```yaml
+  resources:
+    - name: lint-source
+      templateRef:
+        kind: ClusterSourceTemplate
+        name: source-linter
+    - name: build-image
+      templateRef:
+        kind: ClusterImageTemplate
+        name: image-builder-04
+      sources:
+        - resource: lint-source
+          name: source
+    - name: deploy
+      templateRef:
+        kind: ClusterTemplate
+        name: app-deploy-from-sc-image-04
+      images:
+        - resource: build-image
+          name: built-image
+```
+
+We also need to update the permission for our SA, wich we'll do next.
+The SA config itself has not changed.
+
+```yaml
+spec:
+  serviceAccountRef:
+    name: cartographer-from-source-sa
+    namespace: dev
+```
+
+??? Example "Complete Supply Chain"
+
+    ```yaml title="resources/cartographer/app-deploy-04/05-supply-chain.yaml"
+    apiVersion: carto.run/v1alpha1
+    kind: ClusterSupplyChain
+    metadata:
+      name: source-code-supply-chain-04
+    spec:
+      selector:
+        workload-type: source-code-04
+
+      resources:
+        - name: lint-source
+          templateRef:
+            kind: ClusterSourceTemplate
+            name: source-linter
+        - name: build-image
+          templateRef:
+            kind: ClusterImageTemplate
+            name: image-builder-04
+          sources:
+            - resource: lint-source
+              name: source
+        - name: deploy
+          templateRef:
+            kind: ClusterTemplate
+            name: app-deploy-from-sc-image-04
+          images:
+            - resource: build-image
+              name: built-image
+
+      serviceAccountRef:
+        name: cartographer-from-source-sa
+        namespace: dev
+    ```
+
+
+### Update Workload
+
+The only change to the Workload is the name.
+
+```yaml
+apiVersion: carto.run/v1alpha1
+kind: Workload
+metadata:
+  name: hello-04
+  labels:
+    workload-type: source-code-04
+```
+
+??? Example "Updated Workload"
+
+    ```yaml title="resources/cartographer/app-deploy-04/06-workload.yaml"
+    apiVersion: carto.run/v1alpha1
+    kind: Workload
+    metadata:
+      name: hello-04
+      labels:
+        workload-type: source-code-04
+    spec:
+      params:
+        - name: env_key
+          value: "K_SERVICE"
+        - name: env_value
+          value: "carto-hello-source"
+      source:
+        git:
+          ref:
+            branch: main
+          url: https://github.com/joostvdg/go-demo
+    ```
+
+### Exercise 5
+
+```sh
+export DEV_NAMESPACE=dev
+```
+
+Just in case you haven't applied all files yet, here's the whole list again:
+
+```sh
+kubectl apply -f resources/cartographer/app-deploy-04/00-rbac.yaml -n $DEV_NAMESPACE
+kubectl apply -f resources/cartographer/app-deploy-04/01-tekton-task-git-clone-0.3.yaml -n $DEV_NAMESPACE
+kubectl apply -f resources/cartographer/app-deploy-04/01-tekton-task-markdown-lint-0.1.yaml -n $DEV_NAMESPACE
+kubectl apply -f resources/cartographer/app-deploy-04/02-tekton-pipeline-markdown-lint.yaml -n $DEV_NAMESPACE
+kubectl apply -f resources/cartographer/app-deploy-04/03-cluster-source-template.yaml
+kubectl apply -f resources/cartographer/app-deploy-04/04-cluster-template.yaml
+kubectl apply -f resources/cartographer/app-deploy-04/05-supply-chain.yaml
+kubectl apply -f resources/cartographer/app-deploy-04/06-workload.yaml -n $DEV_NAMESPACE
+```
+
+Once created, you can verify the status:
+
+
+```sh
+kubectl get workload -n $DEV_NAMESPACE
+```
+
+As there's a few things going on, we'll see the Workload have several different statusses.
+
+For example:
+
+```sh
+NAME             SOURCE                               SUPPLYCHAIN                   READY   REASON                                                AGE
+hello-04         https://github.com/joostvdg/go-demo  source-code-supply-chain-04   False   SetOfImmutableStampedObjectsIncludesNoHealthyObject   11s
+```
+
+The `Unknown` status with Reason `MissingValueAtPath` is quite common, it usually means a Resource B expects a value from another Resource A.
+While the Resource A is not finished with its work, Resource B cannot read the value and thus reports `MissingValueAtPath`.
+
+```sh
+NAME             SOURCE                               SUPPLYCHAIN                   READY     REASON                        AGE
+hello-04         https://github.com/joostvdg/go-demo  source-code-supply-chain-04   Unknown   MissingValueAtPath            68s
+```
+
+Eventually the Workload will be finished successfully.
+
+```sh
+NAME             SOURCE                               SUPPLYCHAIN                   READY     REASON                        AGE
+hello-04         https://github.com/joostvdg/go-demo  source-code-supply-chain-04   True      Ready                         6m2s
+```
+
+We can then also take a look at the Tekton resources:
+
+```sh
+kubectl get taskrun,pipelinerun -n $DEV_NAMESPACE
+```
+
+```sh
+NAME                                                            SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
+taskrun.tekton.dev/linter-pipeline-run-xn5vg-fetch-repository   True        Succeeded   6m55s       6m40s
+taskrun.tekton.dev/linter-pipeline-run-xn5vg-md-lint-run        True        Succeeded   6m40s       6m34s
+
+NAME                                                  SUCCEEDED   REASON      STARTTIME   COMPLETIONTIME
+pipelinerun.tekton.dev/linter-pipeline-run-xn5vg      True        Succeeded   6m55s       6m34s
+```
+
+For more details, see the commands from the previous Exercises.
 
 !!! Info
 
@@ -1703,8 +2264,8 @@ kubectl get taskrun -n dev -l tekton.dev/task=git-next-tag -ojson | jq '.items |
 [^10]: [Tekton - Task details](https://tekton.dev/docs/pipelines/tasks/)
 [^11]: [Tekton - Pipeline details](https://tekton.dev/docs/pipelines/pipelines/)
 [^12]: [Tekton - Task Catalog](https://github.com/tektoncd/catalog/tree/main/task)
-[^13]: [Tekton Catalog - GitClone Task](https://github.com/tektoncd/catalog/tree/main/task/git-clone)
-[^14]: []()
-[^15]: []()
-[^16]: []()
-
+[^13]: [Tekton Catalog - Git Clone 0.3](https://github.com/tektoncd/catalog/tree/main/task/git-clone)
+[^14]: [Cartographer - Supply Chain with Tekton Pipeline](https://cartographer.sh/docs/v0.7.0/tutorials/lifecycle/)
+[^15]: [Tekton Catalog - Markdown Lint 0.1](https://github.com/tektoncd/catalog/tree/main/task/markdown-lint/0.1)
+[^16]: [Tekton Catalog - Git Clone 0.3](https://github.com/tektoncd/catalog/tree/main/task/git-clone/0.3)
+[^17]: [Cartographer - Lifecycle Tutorial](https://cartographer.sh/docs/v0.7.0/tutorials/lifecycle/)
