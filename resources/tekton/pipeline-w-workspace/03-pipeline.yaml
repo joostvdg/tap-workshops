@@ -1,0 +1,43 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: clone-git-next-tag
+spec:
+  description: |
+    This pipeline clones a git repo, then echoes the README file to the stdout.
+  params:
+    - name: repo-url
+      type: string
+      description: The git repo URL to clone from.
+    - name: base
+      description: version Base to query Git tags for (e.g., v2.1.*)
+      type: string
+    - name: gitrevision
+      description: git revision to checkout
+  workspaces:
+    - name: shared-data
+      description: |
+        This workspace contains the cloned repo files, so they can be read by the
+        next task.
+  tasks:
+    - name: fetch-source
+      taskRef:
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: shared-data
+      params:
+        - name: url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.gitrevision)
+    - name: git-next-tag
+      runAfter: ["fetch-source"]
+      taskRef:
+        name: git-next-tag
+      workspaces:
+        - name: source
+          workspace: shared-data
+      params:
+        - name: base
+          value: $(params.base)

@@ -1,0 +1,17 @@
+apiVersion: carto.run/v1alpha1
+kind: Workload
+metadata:
+  name: source-code-01
+  labels:
+    workload-type: source-code-01
+spec:
+  params:
+    - name: env_key
+      value: "K_SERVICE"
+    - name: env_value
+      value: "carto-hello-source"
+  source:
+    git:
+      ref:
+        branch: main
+      url: https://github.com/joostvdg/go-demo

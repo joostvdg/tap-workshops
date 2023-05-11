@@ -103,12 +103,23 @@ markdown_extensions:
 
 nav:
 - HOME: index.md
+- Labs:
+  - labs.md
+  - install/basic.md
+  - apps/hello-world.md
+  - supply-chain/custom.md  
+  - supply-chain/basic-to-test-scan.md
+  - apps/external-service.md
 - Installation:
   - install/basic.md
   - install/gitops.md
+  - install/mutlicluster.md
 - Applications:
   - apps/hello-world.md
-  - apps/spring-boot.md
+  - apps/external-service.md
   - apps/where-for-dinner.md
+- SupplyChains:
+  - supply-chain/custom.md  
+  - supply-chain/basic-to-test-scan.md
 - Customizations:
-  - custom/supply-chain.md
+  - custom/accelerator.md.md

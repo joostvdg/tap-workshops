@@ -1,0 +1,8 @@
+apiVersion: carto.run/v1alpha1
+kind: Workload
+metadata:
+  name: hello
+  labels:
+    workload-type: pre-built
+spec:
+  image: ghcr.io/joostvdg/go-demo:v2.1.16

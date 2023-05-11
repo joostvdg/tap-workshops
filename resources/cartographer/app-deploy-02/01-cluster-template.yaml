@@ -1,0 +1,35 @@
+---
+apiVersion: carto.run/v1alpha1
+kind: ClusterTemplate
+metadata:
+  name: app-deploy-02
+spec:
+  template:
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: $(workload.metadata.name)$-deployment
+      labels:
+        app: $(workload.metadata.name)$
+    spec:
+      replicas: 3
+      selector:
+        matchLabels:
+          app: $(workload.metadata.name)$
+      template:
+        metadata:
+          labels:
+            app: $(workload.metadata.name)$
+        spec:
+          containers:
+            - name: $(workload.metadata.name)$
+              image: $(workload.spec.image)$
+              env:
+                - name: $(params.env_key)$
+                  value: $(params.env_value)$
+  params:
+    - name: env_key
+      default: "FOO"
+    - name: env_value
+      default: "BAR"
+

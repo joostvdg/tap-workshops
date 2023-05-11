@@ -1,0 +1,44 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: git-next-tag
+  labels:
+    app.kubernetes.io/version: "0.1.0"
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.12.1"
+    tekton.dev/categories: CLI
+    tekton.dev/tags: version
+    tekton.dev/platforms: "linux/amd64,linux/arm64"
+spec:
+  description: >-
+    This task performs git-next-tag operation to determining the next tag for your Git repository.
+  params:
+    - name: image
+      description: option of git-next-tag image
+      type: string
+      default: "ghcr.io/joostvdg/git-next-tag:0.5.3-alpine"
+    - name: base
+      description: version Base to query Git tags for (e.g., v2.1.*)
+      type: string
+    - name: additionalFlags
+      description: Set additional flags, such as enabling verbose logging with `-v` (pollutes output)
+      type: array
+      default: []
+  workspaces:
+    - name: source
+  results:
+    - name: NEXT_TAG
+      description: Next version for Git Tag.
+  steps:
+    - name: pull-tags
+      image: gcr.io/tekton-releases/github.com/tektoncd/pipeline/cmd/git-init:v0.40.2
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+      script: |
+        #!/usr/bin/env sh
+        git config --global safe.directory $(workspaces.source.path)
+        cd $(workspaces.source.path) && git fetch origin 'refs/tags/*:refs/tags/*'
+    - name: git-next-tag
+      image: "$(params.image)"
+      args: ["--baseTag", "$(params.base)", "--path", $(workspaces.source.path), "--outputPath", "$(results.NEXT_TAG.path)", "-vvv" ]

@@ -1,0 +1,13 @@
+apiVersion: carto.run/v1alpha1
+kind: Workload
+metadata:
+  name: hello-02
+  labels:
+    workload-type: pre-built-02
+spec:
+  image: ghcr.io/joostvdg/go-demo:v2.1.16
+  params:
+    - name: env_key
+      value: "K_SERVICE"
+    - name: env_value
+      value: "carto-hello"
