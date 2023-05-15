@@ -804,8 +804,17 @@ kubectl describe app -n ${TAP_INSTALL_NAMESPACE} ${APP}
 If everything is still reconciling and you want to wait on the TAP app to succeed:
 
 ```sh
-kubectl wait --for=condition=ReconcileSucceeded app -n tap-install tap --timeout=10m
+kubectl wait --for=condition=ReconcileSucceeded app \
+  -n ${TAP_INSTALL_NAMESPACE} tap \
+  --timeout=10m
 ```
+
+!!! Warning "Takes about 7-8 minutes"
+
+    ```sh
+    NAME  DESCRIPTION           SINCE-DEPLOY   AGE
+    tap   Reconcile succeeded   4m10s          7m6s
+    ```
 
 ### Determine TBS Version
 
@@ -1060,6 +1069,14 @@ To get the status:
       -n ${TAP_DEVELOPER_NAMESPACE}
     ```
 
+And to verify the Image build (kpack):
+
+```sh
+kubectl describe images.kpack.io smoke-app\
+   -n ${TAP_DEVELOPER_NAMESPACE}
+```
+
+### Call App Endpoint
 
 Collect the endpoint:
 
@@ -1069,17 +1086,36 @@ kubectl get httpproxy -n ${TAP_DEVELOPER_NAMESPACE}
 
 Which should return something like this:
 
-TODO: add result
+```sh
+NAME                                                              FQDN                                            TLS SECRET                                       STATUS   STATUS DESCRIPTION
+smoke-app-contour-smoke-app.dev                                   smoke-app.dev                                                                                    valid    Valid HTTPProxy
+smoke-app-contour-smoke-app.dev.lab02.h2o-2-9349.h2o.vmware.com   smoke-app.dev.lab02.h2o-2-9349.h2o.vmware.com   dev/route-337ba674-14e1-470c-9733-0b1bab8922b4   valid    Valid HTTPProxy
+smoke-app-contour-smoke-app.dev.svc                               smoke-app.dev.svc                                                                                valid    Valid HTTPProxy
+smoke-app-contour-smoke-app.dev.svc.cluster.local                 smoke-app.dev.svc.cluster.local                                                                  valid    Valid HTTPProxy
+```
+
+Copy the URL that has an FQDN with this structure: `<app>.<namespace>.<labName>.h2o-2-9349.h2o.vmware.com`:
 
 ```sh
-
+export URL=
 ```
 
 And then you can curl:
 
 ```sh
-curl http://?
+curl -lk "http://${URL}"
 ```
+
+## Register and View App in TAP GUI
+
+* Open TAP GUI
+* View Workload's Supply Chain
+* Update TAP GUI Config / TAP install
+* Register Application
+* View Workload in App Live View
+* Point to Hello Workload for managing an App with updates to source code (via Gitea)
+
+## Cleanup
 
 ### Delete Workload
 
