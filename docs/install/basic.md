@@ -111,7 +111,38 @@ Indicative cluster resource requirements of TAP per profile: (TODO: verify these
 TODO: provide information on what has been relocated and to where for the LAB environment
 [^3]
 
-## Install Cluster Essentials
+## Optional: Install Cluster Essentials
+
+!!! Danger "Optional"
+    The intention is that your Lab environments has them installed already.
+
+    You can verify this:
+
+    ```sh
+    kubectl get po -n secretgen-controller
+    ```
+
+    ```sh
+    NAME                                   READY   STATUS    RESTARTS   AGE
+    secretgen-controller-b9d795c44-ml5pk   1/1     Running   0          42m
+    ```
+
+    And, to be sure:
+
+    ```sh
+    kubectl get pod -n tkg-system
+    ```
+
+    ```sh
+    NAME                                                     READY   STATUS    RESTARTS   AGE
+    kapp-controller-55d5dd6486-b47mn                         2/2     Running   0          43m
+    tanzu-capabilities-controller-manager-7cdd959657-sb9x6   1/1     Running   0          42m
+    ```
+
+    If these are not there and both commands return empty, verify you are talking to the correct cluster.
+    And if required, below are the instructions for installing the Cluster Essentials.
+
+    If they are installed, [proceed to Choose TAP setup](/tap-workshops/install/basic/#choose-tap-setup-profile-installation-type)
 
 [Cluster Essentials](https://docs.vmware.com/en/Cluster-Essentials-for-VMware-Tanzu/1.5/cluster-essentials/deploy.html)[^4] essentially (pun intended) boils down to two components:
 
@@ -126,21 +157,6 @@ Please install the [Cluster Essentials](https://docs.vmware.com/en/Cluster-Essen
     A minimum version of either controller is required, although there is no explicit version of either known at this point in time (April 2023).
 
     So unless there is a strong reason not too, use the Cluster Essentials referenced in the TAP docs.
-
-### Configure Certificate Authority
-
-While TAP supports configuring a Certificate Authority (CA) to be trusted by the TAP machinery (or [Workloads specifically](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform/1.5/tap/app-sso-service-operators-workload-trust-custom-ca.html)[^11]) this applies to when TAP is installed.
-
-To install TAP, we need to ensure that the KAPP Controller we install with the Cluster Essentials, also trusts our custom CA.
-
-When using a private registry, which we do, we need to create a Secret with a pre-defined name and structure.
-This [kapp-controller-config](https://carvel.dev/kapp-controller/docs/v0.43.2/controller-config/#controller-configuration-spec)[^12] Secret is expected to have the CA as Base64 encoded PEM in the field `caCerts`. Luckily, this is done with a single line via the [kubectl create secret](https://docs.vmware.com/en/Cluster-Essentials-for-VMware-Tanzu/1.5/cluster-essentials/deploy.html)[^4] command.
-
-```sh
-kubectl create secret generic kapp-controller-config \
-   --namespace kapp-controller \
-   --from-file caCerts=ca.crt
-```
 
 ## Choose TAP setup (profile, installation type)
 
@@ -184,7 +200,7 @@ So this is the type we'll use for this workshop.
 
 Ideally we want to use the latest (supported) version.
 
-Which at this time of writing is TAP 1.5.
+Which at this time of writing is TAP **1.5**.
 
 TAP 1.5 requires Kubernetes 1.24, so this is currently (April 2023) not supported on TGKs based customers, as they can only go to Kubernetes 1.23.
 
@@ -192,7 +208,7 @@ Assuming that in due time vSphere 8 with TGKs does support 1.24 (the Supervisor 
 
 TAP 1.6, not yet released, will require Kubernetes 1.25, which won't be supported anytime soon with TGKs or TGKm.
 
-So let's stick to TAP 1.5.
+So let's stick to TAP **1.5**.
 
 ### Conclusion
 
@@ -221,11 +237,11 @@ The TAP Package Repository comes from either Tanzu Network or the Registry you r
 In either case, you need a Registry ***read*** credential in the Namespace we install the Package Repository in.
 
 ```sh
-TAP_INSTALL_NAMESPACE=tap-install
-TAP_INSTALL_REGISTRY_SECRET=tap-registry
-TAP_INSTALL_REGISTRY_HOSTNAME=
-TAP_INSTALL_REGISTRY_USERNAME=
-TAP_INSTALL_REGISTRY_PASSWORD=
+export TAP_INSTALL_NAMESPACE=tap-install
+export TAP_INSTALL_REGISTRY_SECRET=tap-registry
+export TAP_INSTALL_REGISTRY_HOSTNAME=
+export TAP_INSTALL_REGISTRY_USERNAME=
+export TAP_INSTALL_REGISTRY_PASSWORD=
 ```
 
 First, create the Namespace:
@@ -238,12 +254,12 @@ And then use the Tanzu CLI to create a credential via the SecretGen Controller:
 
 ```sh
 tanzu secret registry add ${TAP_INSTALL_REGISTRY_SECRET} \
-  --username ${INSTALL_REGISTRY_USERNAME} \
-  --password ${INSTALL_REGISTRY_PASSWORD} \
-  --server ${INSTALL_REGISTRY_HOSTNAME} \
-  --namespace ${TAP_INSTALL_NAMESPACE} \
-  --export-to-all-namespaces \
-  --yes
+    --server    $TAP_INSTALL_REGISTRY_HOSTNAME \
+    --username  $TAP_INSTALL_REGISTRY_USERNAME \
+    --password  $TAP_INSTALL_REGISTRY_PASSWORD \
+    --namespace ${TAP_INSTALL_NAMESPACE} \
+    --export-to-all-namespaces \
+    --yes 
 ```
 
 !!! Important "Registry Write Secret"
@@ -253,11 +269,11 @@ tanzu secret registry add ${TAP_INSTALL_REGISTRY_SECRET} \
     Define the appropriate environment variables:
 
     ```sh
-    TAP_INSTALL_NAMESPACE=tap-install
-    TAP_BUILD_REGISTRY_SECRET=registry-credentials
-    TAP_BUILD_REGISTRY_HOSTNAME=
-    TAP_BUILD_REGISTRY_USERNAME=
-    TAP_BUILD_REGISTRY_PASSWORD=
+    export TAP_INSTALL_NAMESPACE=tap-install
+    export TAP_BUILD_REGISTRY_SECRET=registry-credentials
+    export TAP_BUILD_REGISTRY_HOSTNAME=
+    export TAP_BUILD_REGISTRY_USERNAME=
+    export TAP_BUILD_REGISTRY_PASSWORD=
     ```
 
     And then we use the Tanzu CLI to create the secret:
@@ -290,10 +306,10 @@ And our environment variables will be:
 Set the environment variables to values appropriate for your environment.
 
 ```sh
-TAP_INSTALL_NAMESPACE=tap-install
-TAP_VERSION=1.5.0
-INSTALL_REGISTRY_REPO=tap
-INSTALL_REGISTRY_HOSTNAME=
+export TAP_INSTALL_NAMESPACE=tap-install
+export TAP_VERSION=1.5.0
+export INSTALL_REGISTRY_REPO=tap
+export INSTALL_REGISTRY_HOSTNAME=${TAP_INSTALL_REGISTRY_HOSTNAME}
 ```
 
 And use the Tanzu CLI to create the Package Repository for TAP in the TAP install Namespace (usually `tap-install`).
@@ -544,8 +560,6 @@ It is recommended to use some kind of templating.
 
 In the world of Tanzu (and TAP), it makes sense to use YTT.
 
-TODO: review this by doing all the commands/use the template
-
 ```yaml title="full-profile.ytt.yaml"
 
 #@ load("@ytt:data", "data")
@@ -558,7 +572,6 @@ shared:
   ingress_domain: #@ dv.domainName
   ca_cert_data: #@ dv.caCert
   image_registry:
-    project_path: #@ kpRegistry
     secret:
       name: #@ dv.buildRegistrySecret
       namespace: tap-install
@@ -566,6 +579,10 @@ shared:
 buildservice:
   pull_from_kp_default_repo: true
   exclude_dependencies: true
+  kp_default_repository: #@ kpRegistry
+  kp_default_repository_secret:
+      name: #@ dv.buildRegistrySecret
+      namespace: tap-install
 
 supply_chain: basic
 ootb_supply_chain_basic:
@@ -606,6 +623,12 @@ crossplane:
     name: ca-bundle-config
     key: ca-bundle
 
+#! reduces memory and CPU requirements, not recommended for production
+#! but our Lab environments have resource restrictions
+cnrs:
+  lite:
+    enable: true 
+
 contour:
   envoy:
     service:
@@ -613,9 +636,11 @@ contour:
 
 ceip_policy_disclosed: true
 excluded_packages:
-  - scanning.apps.tanzu.vmware.com
-  - grype.scanning.apps.tanzu.vmware.co
-  - policy.apps.tanzu.vmware.com
+  - scanning.apps.tanzu.vmware.com #! disabled for now, enabled when we upgrade OOTB Basic to Test & Scanning
+  - grype.scanning.apps.tanzu.vmware.com #! disabled for now, enabled when we upgrade OOTB Basic to Test & Scanning
+  - policy.apps.tanzu.vmware.com #! disabled for now, enabled when we upgrade OOTB Basic to Test & Scanning
+  - eventing.tanzu.vmware.com #! not used, so removing to reduce memory/cpu footprint
+  - tap-telemetry.tanzu.vmware.com.0.5.0-build #! not used, so removing to reduce memory/cpu footprint
 ```
 
 !!! Tip "Template Explained"
@@ -698,7 +723,7 @@ First, we set the required variables:
 export TAP_BUILD_REGISTRY_SECRET=registry-credentials
 export BUILD_REGISTRY_REPO=tap-apps
 export TBS_REPO=buildservice/tbs-full-deps
-export CA_CERT=$(cat ssl/ca.pem)
+export CA_CERT=$(cat ca.crt)
 export BUILD_REGISTRY=
 export DOMAIN_NAME=
 ```
@@ -714,6 +739,12 @@ ytt -f full-profile.ytt.yaml \
   -v domainName="$DOMAIN_NAME" \
   -v caCert="${CA_CERT}" \
   > "tap-values-full.yml"
+```
+
+We recommend you inspect the generated file:
+
+```sh
+cat tap-values-full.yml
 ```
 
 ### Install TAP Package
@@ -752,7 +783,28 @@ kubectl get app -n ${TAP_INSTALL_NAMESPACE}
 If there is an issue, you can debug the package installs via `kubectl` commands:
 
 ```sh
-kubectl describe app -n ${TAP_INSTALL_NAMESPACE} tap
+kubectl describe app -n ${TAP_INSTALL_NAMESPACE} ${APP}
+```
+
+!!! Hint "Carvel Tips"
+
+    Some Carvel tips worth mentioning:
+
+    1. If you need to update an installation, you can run `tap package install` again. The Tanzu CLI handles the difference between Install and Update for you.
+    1. KAPP works with asynchronous loops. This can cause the Client (Tanzu CLI) to break out of the watch loop when it detects the faillure of the **previous** reconcilliation. Don't be alarmed, and check with `kubectl get app` or Tanzu CLI (below)  to verify if the update succeeded.
+      ```sh
+      tanzu package installed list
+      ```
+    1. If you are sure there's nothing holding back a successful reconciliation, but it isn't updating (yet), you can force a reconcilliation with `kick`: 
+      ```sh
+      tanzu package installed kick ${APP} -n ${TAP_INSTALL_NAMESPACE}
+      ```
+    1. If you delete the TAP install, and then re-install it, remember that an uninstall removes all associated Namespaces as well. So you will have to do the [Crossplane prep](/tap-workshops/install/basic/#configure-certificate-authority-bundle-for-crossplane) again.
+
+If everything is still reconciling and you want to wait on the TAP app to succeed:
+
+```sh
+kubectl wait --for=condition=ReconcileSucceeded app -n tap-install tap --timeout=10m
 ```
 
 ### Determine TBS Version
@@ -796,7 +848,7 @@ And we then we can install the TBS Dependencies Package Repository:
 
 ```sh
 tanzu package repository add tbs-full-deps-repository \
-  --url ${INSTALL_REGISTRY_HOSTNAME}/${TBS_REPO}:VERSION \
+  --url ${INSTALL_REGISTRY_HOSTNAME}/${TBS_REPO}:${TBS_VERSION} \
   --namespace ${TAP_INSTALL_NAMESPACE}
 ```
 
@@ -978,21 +1030,55 @@ We can then either use the CLI or the `Workload` CR to create our test workload.
 Use `kubectl wait` to wait for the app to be ready.
 
 ```sh
-kubectl wait --for=condition=Ready Workload smoke-app --timeout=10m -n "$TAP_DEVELOPER_NAMESPACE"
+kubectl wait --for=condition=Ready Workload smoke-app --timeout=10m -n ${$TAP_DEVELOPER_NAMESPACE}
 ```
 
 ### Verify Workload
 
 To see the logs:
 
-```sh
-tanzu apps workload tail smoke-app
-```
+=== "Tanzu CLI"
+    ```sh
+    tanzu apps workload tail smoke-app --timestamp --since 1h \
+      -n ${TAP_DEVELOPER_NAMESPACE}
+    ```
+=== "Stern"
+    ```sh
+    stern -n ${TAP_DEVELOPER_NAMESPACE} -l app.kubernetes.io/part-of=smoke-app
+    ```
 
 To get the status:
 
+=== "Tanzu CLI"
+    ```sh
+    tanzu apps workload get smoke-app \
+        -n ${TAP_DEVELOPER_NAMESPACE}
+    ```
+=== "Kubectl"
+    ```sh
+    kubectl get workload smoke-app \
+      -n ${TAP_DEVELOPER_NAMESPACE}
+    ```
+
+
+Collect the endpoint:
+
 ```sh
-tanzu apps workload get smoke-app
+kubectl get httpproxy -n ${TAP_DEVELOPER_NAMESPACE}
+```
+
+Which should return something like this:
+
+TODO: add result
+
+```sh
+
+```
+
+And then you can curl:
+
+```sh
+curl http://?
 ```
 
 ### Delete Workload
@@ -1000,7 +1086,7 @@ tanzu apps workload get smoke-app
 And then we can delete our test workload if want to.
 
 ```sh
-tanzu apps workload delete smoke-app -y -n "$TAP_DEVELOPER_NAMESPACE"
+tanzu apps workload delete smoke-app -y -n ${TAP_DEVELOPER_NAMESPACE}
 ```
 
 ## Links
