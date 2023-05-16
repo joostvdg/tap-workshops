@@ -1000,11 +1000,11 @@ We can then either use the CLI or the `Workload` CR to create our test workload.
 
 === "Tanzu CLI"
     ```sh
-    tanzu apps workload create smoke-app \
+    tanzu apps workload create tanzu-java-web-app \
       --git-repo https://github.com/sample-accelerators/tanzu-java-web-app.git \
       --git-branch main \
       --type web \
-      --label app.kubernetes.io/part-of=smoke-app \
+      --label app.kubernetes.io/part-of=tanzu-java-web-app \
       --annotation autoscaling.knative.dev/minScale=1 \
       --yes \
       -n "$TAP_DEVELOPER_NAMESPACE"
@@ -1015,9 +1015,9 @@ We can then either use the CLI or the `Workload` CR to create our test workload.
     kind: Workload
     metadata:
       labels:
-        app.kubernetes.io/part-of: smoke-app
+        app.kubernetes.io/part-of: tanzu-java-web-app
         apps.tanzu.vmware.com/workload-type: web
-      name: smoke-app
+      name: tanzu-java-web-app
       namespace: ${TAP_DEVELOPER_NAMESPACE}
     spec:
       params:
@@ -1039,7 +1039,7 @@ We can then either use the CLI or the `Workload` CR to create our test workload.
 Use `kubectl wait` to wait for the app to be ready.
 
 ```sh
-kubectl wait --for=condition=Ready Workload smoke-app --timeout=10m -n ${$TAP_DEVELOPER_NAMESPACE}
+kubectl wait --for=condition=Ready Workload tanzu-java-web-app --timeout=10m -n ${$TAP_DEVELOPER_NAMESPACE}
 ```
 
 ### Verify Workload
@@ -1048,31 +1048,31 @@ To see the logs:
 
 === "Tanzu CLI"
     ```sh
-    tanzu apps workload tail smoke-app --timestamp --since 1h \
+    tanzu apps workload tail tanzu-java-web-app --timestamp --since 1h \
       -n ${TAP_DEVELOPER_NAMESPACE}
     ```
 === "Stern"
     ```sh
-    stern -n ${TAP_DEVELOPER_NAMESPACE} -l app.kubernetes.io/part-of=smoke-app
+    stern -n ${TAP_DEVELOPER_NAMESPACE} -l app.kubernetes.io/part-of=tanzu-java-web-app
     ```
 
 To get the status:
 
 === "Tanzu CLI"
     ```sh
-    tanzu apps workload get smoke-app \
+    tanzu apps workload get tanzu-java-web-app \
         -n ${TAP_DEVELOPER_NAMESPACE}
     ```
 === "Kubectl"
     ```sh
-    kubectl get workload smoke-app \
+    kubectl get workload tanzu-java-web-app \
       -n ${TAP_DEVELOPER_NAMESPACE}
     ```
 
 And to verify the Image build (kpack):
 
 ```sh
-kubectl describe images.kpack.io smoke-app\
+kubectl describe images.kpack.io tanzu-java-web-app\
    -n ${TAP_DEVELOPER_NAMESPACE}
 ```
 
@@ -1087,11 +1087,11 @@ kubectl get httpproxy -n ${TAP_DEVELOPER_NAMESPACE}
 Which should return something like this:
 
 ```sh
-NAME                                                              FQDN                                            TLS SECRET                                       STATUS   STATUS DESCRIPTION
-smoke-app-contour-smoke-app.dev                                   smoke-app.dev                                                                                    valid    Valid HTTPProxy
-smoke-app-contour-smoke-app.dev.lab02.h2o-2-9349.h2o.vmware.com   smoke-app.dev.lab02.h2o-2-9349.h2o.vmware.com   dev/route-337ba674-14e1-470c-9733-0b1bab8922b4   valid    Valid HTTPProxy
-smoke-app-contour-smoke-app.dev.svc                               smoke-app.dev.svc                                                                                valid    Valid HTTPProxy
-smoke-app-contour-smoke-app.dev.svc.cluster.local                 smoke-app.dev.svc.cluster.local                                                                  valid    Valid HTTPProxy
+NAME                                                              FQDN                                                     TLS SECRET                                       STATUS   STATUS DESCRIPTION
+tanzu-java-web-app-contour-109492d47681cc5e55d2b928e2e9ff95tanz   tanzu-java-web-app.dev.svc.cluster.local                                                                  valid    Valid HTTPProxy
+tanzu-java-web-app-contour-39f7f53b78facb4d2d2027398616ca4btanz   tanzu-java-web-app.dev.lab02.h2o-2-9349.h2o.vmware.com   dev/route-08a46009-801a-4819-9ddd-b07f4377367d   valid    Valid HTTPProxy
+tanzu-java-web-app-contour-tanzu-java-web-app.dev                 tanzu-java-web-app.dev                                                                                    valid    Valid HTTPProxy
+tanzu-java-web-app-contour-tanzu-java-web-app.dev.svc             tanzu-java-web-app.dev.svc                                                                                valid    Valid HTTPProxy
 ```
 
 Copy the URL that has an FQDN with this structure: `<app>.<namespace>.<labName>.h2o-2-9349.h2o.vmware.com`:
@@ -1108,12 +1108,112 @@ curl -lk "http://${URL}"
 
 ## Register and View App in TAP GUI
 
-* Open TAP GUI
-* View Workload's Supply Chain
-* Update TAP GUI Config / TAP install
-* Register Application
-* View Workload in App Live View
-* Point to Hello Workload for managing an App with updates to source code (via Gitea)
+If we want to use the [App Live View feature](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform/1.3/tap/GUID-app-live-view-about-app-live-view.html)[^16], we need to register our Application in the [Software Catalog](https://backstage.io/docs/features/software-catalog/)[^17].
+
+### Access TAP GUI
+
+First, let us access the TAP GUI.
+
+```sh
+kubectl get httpproxy -n tap-gui
+```
+
+Which should give you something like: `tap-gui.${labName}.h2o-2-9349.h2o.vmware.com`:
+
+```sh
+NAME      FQDN                                      TLS SECRET     STATUS   STATUS DESCRIPTION
+tap-gui   tap-gui.lab02.h2o-2-9349.h2o.vmware.com   tap-gui-cert   valid    Valid HTTPProxy
+```
+
+```sh
+open "https://tap-gui.lab02.h2o-2-9349.h2o.vmware.com"
+```
+
+Click the `ENTER` button to enter as guest.
+We'll look at adding authentication in another Lab.
+
+You should already see our demo application in the Supply Chains view.
+
+!!! Tip
+    The Supply Chain view is the "Cross" icon.
+
+    You can also expand the left hand menu with the `>>` button on the top of the left hand menu.
+
+As we have a Full Profile, the Cluster and Target Cluster set to `host`.
+
+The **Cluster** is where the **Workload** resource is handled, to build and test the application, and build the container image.
+
+The **Target Cluster**, is the cluster where the **Deliverable** is handled, to run the application with kNative Serving.
+
+In a Multicluster setup, this helps you keep track of where applications are build and where they are deployed.
+
+### Register Application
+
+To get a ***live*** view of our application, we have to register it in the Software Catalog[^17].
+
+We do so by going to the `Home` screen, via the house icon in the left hand menu.
+
+We can then add the application, by clicking the `REGISTER ENTITY` button on the right.
+
+Here we add a link to the `catalog-info.yaml` of the application.
+
+A catalog describes the application, its owner, and most importantly, it includes information for the TAP GUI on how to find its resources.
+This is done with an annotation: 
+
+```yaml
+  annotations:
+    'backstage.io/kubernetes-label-selector': 'app.kubernetes.io/part-of=tanzu-java-web-app'
+```
+
+The Catalog file looks as follows:
+
+```yaml
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: tanzu-java-web-app
+  description: Tanzu Java Web App
+  tags:
+    - app-accelerator
+    - java
+    - spring
+    - web
+    - tanzu
+  annotations:
+    'backstage.io/kubernetes-label-selector': 'app.kubernetes.io/part-of=tanzu-java-web-app'
+spec:
+  type: service
+  lifecycle: experimental
+  owner: default-team
+```
+
+The link to add:
+
+```sh
+https://github.com/sample-accelerators/tanzu-java-web-app/blob/main/catalog/catalog-info.yaml
+```
+
+!!! Danger "GitHub Is Trusted, Gitea is not!"
+
+    The demo application we just used and its catalog live in GitHub.
+
+    GitHub has a proper certificate and is already trusted as a source.
+
+    For other Git servers, such as our Gitea server, we will need to configure the TAP GUI to trust it.
+
+    We do so in another Lab.
+
+### View Application Resources
+
+Go back to the Home screen of the TAP GUI.
+
+Here you should now see an entry for our application `tanzu-java-web-app`.
+
+If you click on the name, you see the resources the TAP GUI can find in the clusters it has access to.
+
+In our case, that is the same cluster, but in a Multicluster setup, it depends on which clusters TAP GUI has read access to.
+
+To see the live resources, click on `Runtime Resources`.
 
 ## Cleanup
 
@@ -1122,7 +1222,7 @@ curl -lk "http://${URL}"
 And then we can delete our test workload if want to.
 
 ```sh
-tanzu apps workload delete smoke-app -y -n ${TAP_DEVELOPER_NAMESPACE}
+tanzu apps workload delete tanzu-java-web-app -y -n ${TAP_DEVELOPER_NAMESPACE}
 ```
 
 ## Links
@@ -1142,3 +1242,5 @@ tanzu apps workload delete smoke-app -y -n ${TAP_DEVELOPER_NAMESPACE}
 [^13]: [Crossplane - Configure Self-signed CA Certs support](https://docs.crossplane.io/knowledge-base/guides/self-signed-ca-certs/)
 [^14]: [TAP 1.5 - Bitnami Services](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform/1.5/tap/bitnami-services-tutorials-working-with-bitnami-services.html)
 [^15]: [Crossplane - The Cloud Native Control Plane Framework](https://www.crossplane.io/)
+[^16]: [Tanzu Application Platform - App Live View](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform/1.3/tap/GUID-app-live-view-about-app-live-view.html)
+[^17]: [Backstage - Software Catalog](https://backstage.io/docs/features/software-catalog/)

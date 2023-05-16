@@ -133,3 +133,25 @@ kubectl get httpproxy -A
 curl -k "https://tap-demo-03.apps.run-01.h2o-2-9349.h2o.vmware.com/"
 ```
 
+### Update Profile
+
+* Open TAP GUI
+* View Workload's Supply Chain
+* Update TAP GUI Config / TAP install
+* Register Application
+* View Workload in App Live View
+* Point to Hello Workload for managing an App with updates to source code (via Gitea)
+
+```yaml
+tap_gui:
+  app_config:
+    backend:
+      reading:
+        allow:
+          - host: "gitea.services.h2o-2-9349.h2o.vmware.com"
+    integrations:
+      gitea:
+        - host: gitea.services.h2o-2-9349.h2o.vmware.com
+          username: gitea
+          password: 'VMware123!'
+```
