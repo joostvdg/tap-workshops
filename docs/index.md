@@ -24,6 +24,14 @@ So instead of `alpine` -> `harbor.services.h2o-2-9349.h2o.vmware.com/dockerhub/l
 docker pull harbor.services.h2o-2-9349.h2o.vmware.com/dockerhub/library/alpine
 ```
 
+## Labs
+
+1. [Full & OOTB Basic](/tap-workshops/install/basic)
+1. [Hello World++ Workload](/tap-workshops/apps/hello-world.md)
+1. [Custom Supply Chain](/tap-workshops/supply-chain/custom.md)
+1. [Upgrade OOTB Basic to OOTB Test & Scanning](/tap-workshops/supply-chain/basic-to-test-scan.md)
+1. [External Services](/tap-workshops/apps/external-service.md)
+
 ## Workshops
 
 * Installations
