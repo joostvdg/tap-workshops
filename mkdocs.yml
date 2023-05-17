@@ -100,16 +100,8 @@ markdown_extensions:
       custom_checkbox: true
   - pymdownx.tilde
 
-
 nav:
 - HOME: index.md
-- Labs:
-  - labs.md
-  - install/basic.md
-  - apps/hello-world.md
-  - supply-chain/custom.md  
-  - supply-chain/basic-to-test-scan.md
-  - apps/external-service.md
 - Installation:
   - install/basic.md
   - install/gitops.md
