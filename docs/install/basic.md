@@ -909,11 +909,6 @@ CONDITIONS:         - type: ReconcileSucceeded
 
 ## Install Test Application
 
-* explain workloads
-* CLI
-* namespace & namespace provisioner
-* ?
-
 One of the goals of TAP is to be flexible, to support the various ways people build and run applications.
 
 Cartographer's Supply Chains let you define any workflow you want for any kind of resource you can express in Kubernetes.
