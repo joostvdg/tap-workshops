@@ -11,6 +11,11 @@
          <changefreq>daily</changefreq>
     </url>
     <url>
+         <loc>https://joostvdg.github.io/tap-workshops/apps/api/</loc>
+         <lastmod>2023-05-17</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
          <loc>https://joostvdg.github.io/tap-workshops/apps/external-service/</loc>
          <lastmod>2023-05-17</lastmod>
          <changefreq>daily</changefreq>
@@ -27,6 +32,11 @@
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/custom/accelerator/</loc>
+         <lastmod>2023-05-17</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://joostvdg.github.io/tap-workshops/custom/tap-gui-auth/</loc>
          <lastmod>2023-05-17</lastmod>
          <changefreq>daily</changefreq>
     </url>
