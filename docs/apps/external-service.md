@@ -17,24 +17,6 @@ tags: [tap, kubernetes, spring, java, spring-boot, mysql, crossplane]
 - [ ] I can use a postgres resource claim with sample Spring Boot Application Pet Clinic Accelerator
 - [ ] Expose Accerators Endpoint for use in Tanzu Accelerator Plugins
 
-## TODO
-
-* bitnami services one
-* use spring boot 3
-* use Java 17
-* create via accelerator
-* skip testcontainer -> explain what can be done
-* create ssh secret
-* go through the steps
-    * create http secret
-    * add
-    * register in TAP GUI
-    * show API
-    * verify
-    * update -> main controller & test
-    * run local `mvn test` if you can
-    * verify update
-
 ## Steps
 
 * fork application
@@ -51,29 +33,6 @@ tags: [tap, kubernetes, spring, java, spring-boot, mysql, crossplane]
 * use services toolkit to bind
     * create claim
     * update workload to use claim
-
-### Config Used
-
-* Project Name: tap-workload-demo-01
-* Artifact Id: customer-profile
-* Group Id: com.example
-* Package Name: com.example.customerprofile
-* Build Tool: maven
-* Expose Open API Endpoint: Yes
-* Update Boot 3: Yes
-* Java Version: 17
-* Database Type: postgres
-* Database Name: customer-database
-* Database Migration Tool: flyway
-* Database Integration Test Type: in-memory
-* Include Build Tool Wrapper: Yes
-* Api System: profile-management
-* Api Owner: customer-relations-department
-* Api Description: Manage customer profiles
-* Database Postgres Storage Class: default
-* Live Update IDE Support: Yes
-* Source Repository Prefix: dev.local
-
 
 ## Update Supply Chain
 
@@ -814,8 +773,9 @@ tanzu apps workload create spring-boot-postgres-01 \
     tap-demo-04   Error                                         19m
     ```
 
+    Read [this paragraph](/tap-workshops/supply-chain/basic-to-test-scan/#create-tls-app-cert-secret-separately) for a more permanent solution.
+    
     To remedy this, we can do the secret export and import ourselves with the **SecretGen Controller**:
-
 
     ```yaml title="metadata-tls-secret-import-and-export.yaml"
     ---
@@ -977,10 +937,6 @@ Now results in a value:
 ```json
 [{"id":1,"userId":null,"name":"piet","creationDate":"2023-05-17T11:01:02.136+00:00"}]
 ```
-
-## Create TLS App Cert Secret Separately
-
-TODO
 
 ## References
 

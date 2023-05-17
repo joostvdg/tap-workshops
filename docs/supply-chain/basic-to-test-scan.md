@@ -568,6 +568,9 @@ imagescan.scanning.apps.tanzu.vmware.com/tap-demo-04   Completed   harbor.servic
 
     To remedy this, we can do the secret export and import ourselves with the **SecretGen Controller**:
 
+    Note, this is a **temporary** solution, as TAP will remove the secret in the `dev` namespace within a few minutes.
+
+    Read [this paragraph](/tap-workshops/supply-chain/basic-to-test-scan/#create-tls-app-cert-secret-separately) for a more permanent solution.
 
     ```yaml title="metadata-tls-secret-import-and-export.yaml"
     ---
@@ -810,6 +813,234 @@ tanzu package install tap \
 Go to your TAP GUI, and either open a Scan step in a Supply Chain, or open the **Security Analysis** screen (shield with magnifying glass icon).
 
 You should now see the scan result details.
+
+## Create TLS App Cert Secret Separately
+
+Using the SecretGen's SecretImport and SecretExport capability solves the missing `app-tls-cert` temporarily.
+
+For a permanent solution, we need to do the following:
+
+* copy the secret to another namespace
+* update the Grype app config to use this new secret
+* generate the new values file
+* update our TAP install
+
+### Copy the Certificate Secret
+
+Let's copy the secret into a file.
+
+```sh
+kubectl get secret -n metadata-store app-tls-cert \
+  -o yaml > metadata-store-app-tls-cert.yaml
+```
+
+Remove any values we can't use:
+
+```sh
+yq e -i '.metadata = {"name": "metadata-store-app-tls-cert"}' metadata-store-app-tls-cert.yaml
+```
+
+And then apply it to our target namespace:
+
+```sh
+kubectl apply -f metadata-store-app-tls-cert.yaml \
+  -n ${TAP_DEVELOPER_NAMESPACE}
+```
+
+### Update TAP Profile
+
+The Grype config to change, is the following:
+
+```yaml
+grype:
+  namespace: dev
+  metadataStore:
+    caSecret:
+      name: metadata-store-app-tls-cert
+```
+
+
+```yaml title="full-profile.ytt.yaml"
+
+#@ load("@ytt:data", "data")
+#@ dv = data.values
+#@ kpRegistry = "{}/{}".format(dv.buildRegistry, dv.tbsRepo)
+---
+profile: full
+
+shared:
+  ingress_domain: #@ dv.domainName
+  ca_cert_data: #@ dv.caCert
+  image_registry:
+    secret:
+      name: #@ dv.buildRegistrySecret
+      namespace: tap-install
+
+buildservice:
+  pull_from_kp_default_repo: true
+  exclude_dependencies: true
+  kp_default_repository: #@ kpRegistry
+  kp_default_repository_secret:
+      name: #@ dv.buildRegistrySecret
+      namespace: tap-install
+
+supply_chain: testing_scanning
+ootb_supply_chain_testing_scanning:
+  registry:
+    server: #@ dv.buildRegistry
+    repository: #@ dv.buildRepo
+
+appliveview_connector:
+  backend:
+    sslDeactivated: true
+    ingressEnabled: true
+    host: #@ "appliveview."+dv.domainName
+
+appliveview:
+  ingressEnabled: true
+  server:
+    tls:
+      enabled: false
+
+tap_gui:
+  service_type: ClusterIP
+  app_config:
+    proxy:
+      /metadata-store:
+        target: https://metadata-store-app.metadata-store:8443/api/v1
+        changeOrigin: true
+        secure: false
+        headers:
+          Authorization: #@ "Bearer "+dv.metadataToken
+          X-Custom-Source: project-star
+    backend:
+      reading:
+        allow:
+          - host: #@ dv.gitServer
+    integrations:
+      gitea:
+        - host: #@ dv.gitServer
+          username: #@ dv.gitUser
+          password: #@ dv.gitPassword
+    auth:
+      allowGuestAccess: true
+    customize:
+      custom_name: 'Portal McPortalFace'
+    organization:
+      name: 'Org McOrg Face'
+    catalog:
+      locations:
+        - type: url
+          target: https://github.com/joostvdg/tap-catalog/blob/main/catalog-info.yaml
+        - type: url
+          target: https://github.com/joostvdg/tap-hello-world/blob/main/catalog/catalog-info.yaml
+
+crossplane:
+  registryCaBundleConfig:
+    name: ca-bundle-config
+    key: ca-bundle
+
+#! reduces memory and CPU requirements, not recommended for production
+#! but our Lab environments have resource restrictions
+cnrs:
+  lite:
+    enable: true 
+
+contour:
+  envoy:
+    service:
+      type: LoadBalancer
+
+grype:
+  db:
+    dbUpdateUrl: https://minio.services.h2o-2-9349.h2o.vmware.com/grype/databases/listing.json
+  namespace: dev
+  metadataStore:
+    caSecret:
+      name: metadata-store-app-tls-cert
+
+ceip_policy_disclosed: true
+excluded_packages:
+  - eventing.tanzu.vmware.com #! not used, so removing to reduce memory/cpu footprint
+  - tap-telemetry.tanzu.vmware.com #! not used, so removing to reduce memory/cpu footprint
+```
+
+### Generate updated profile
+
+```sh
+export GIT_SERVER=gitea.services.h2o-2-9349.h2o.vmware.com
+export GIT_USER=gitea
+export GIT_PASSWORD='VMware123!'
+export TAP_BUILD_REGISTRY_SECRET=registry-credentials
+export BUILD_REGISTRY_REPO=tap-apps
+export TBS_REPO=buildservice/tbs-full-deps
+export CA_CERT=$(cat ca.crt)
+export BUILD_REGISTRY=
+export DOMAIN_NAME=
+```
+
+And then we run YTT to generate our Profile configuration file.
+
+```sh
+ytt -f full-profile.ytt.yaml \
+  -v buildRegistry="$BUILD_REGISTRY" \
+  -v buildRegistrySecret="$BUILD_REGISTRY_SECRET" \
+  -v buildRepo="$BUILD_REGISTRY_REPO" \
+  -v tbsRepo="$TBS_REPO" \
+  -v domainName="$DOMAIN_NAME" \
+  -v caCert="${CA_CERT}" \
+  -v gitUser="${GIT_USER}" \
+  -v gitPassword="${GIT_PASSWORD}" \
+  -v gitServer="${GIT_SERVER}" \
+  -v metadataToken="${METADATA_TOKEN}" \
+  > "tap-values-full.yml"
+```
+
+We recommend you inspect the generated file:
+
+```sh
+cat tap-values-full.yml
+```
+
+### Install Updated Profile
+
+We then update the TAP installation via the same command.
+
+```sh
+export TAP_INSTALL_NAMESPACE=tap-install
+export TAP_VERSION=1.5.0
+```
+
+```sh
+tanzu package install tap \
+  -p tap.tanzu.vmware.com \
+  -v $TAP_VERSION \
+  --values-file tap-values-full.yml \
+  -n ${TAP_INSTALL_NAMESPACE}
+```
+
+```yaml title="metadata-tls-secret-import-and-export.yaml"
+---
+apiVersion: secretgen.carvel.dev/v1alpha1
+kind: SecretExport
+metadata:
+  name: metadata-store-app-tls-cert
+  namespace: metadata-store-secrets
+spec:
+  toNamespace: dev
+---
+apiVersion: secretgen.carvel.dev/v1alpha1
+kind: SecretImport
+metadata:
+  name: metadata-store-app-tls-cert
+  namespace: dev
+spec:
+  fromNamespace: metadata-store-secrets
+```
+
+```sh
+kubectl apply -f metadata-tls-secret-import-and-export.yaml
+```
 
 ## References
 
