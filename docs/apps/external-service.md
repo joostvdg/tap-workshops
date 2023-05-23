@@ -5,6 +5,15 @@ author: joostvdg
 tags: [tap, kubernetes, spring, java, spring-boot, mysql, crossplane]
 ---
 
+In this workshop, we onboard an Application into TAP that depends on an external database.
+
+For this to work well, we need to support the following:
+* Ability to have a database during testing
+* Ability to inject connection details to external database
+
+For the first, we need to customize our Supply Chain.
+The latter is supported in TAP via the Services Toolkit component, leveraging Crossplane and Service Binding Spec to do so.
+
 ## Checks
 
 - [ ] I am able to register API Documentation for a Workload in TAP GUI
@@ -19,11 +28,11 @@ tags: [tap, kubernetes, spring, java, spring-boot, mysql, crossplane]
 
 ## Steps
 
-* fork application
 * update supply chain
     * create new Tekton Tasks
     * create new Tekton Pipeline that uses these Tasks
     * create copy from OOTB Supply Chain that uses Tekton Pipeline
+* fork existing application
 * create Workload and see tests succeed
 * deployment fails -> we need a database
 * create database via Bitnami Services
@@ -36,9 +45,35 @@ tags: [tap, kubernetes, spring, java, spring-boot, mysql, crossplane]
 
 ## Update Supply Chain
 
-* apps.tanzu.vmware.com/has-tests-needs-workspace: "true"
+As stated in the preamble, we supply our application with a database during testing.
+
+To be precise, we will provide it with a means to do so itself, via Testcontainers.
+
+To do so, we need to give it a Docker host to talk to, to spin up arbitrary containers.
+
+!!! Danger "Not Production Ready"
+
+    There are better ways of giving the application a Docker host to talk to, so that it can leverage Test Containers.
+
+    You can run the build on specific VMs or Micro VMs with Docker, or expose the Docker daemon on those VMs.
+
+    To solution below uses Docker In Docker, or DinD.
+    While supported by Docker, it is not a best practice.
+
+To make this Supply Chain leverage Tekton in a good way, we will also introduce a (Tekton) Workspace to share code between Tasks.
+
+!!! Important "Create the files below"
+
+    The Files you see below need to be applied to the cluster.
+
+    So please create them on your machine, and follow the instructions after.
 
 ### Checkout Task
+
+A proper Pipeline starts with checking out the code.
+Below is a Task that uses the information provided by the OOTB Supply Chain to copy the code from FluxCD.
+
+It stores this on a Workspace that is shared with any next Task in the (Tekton) Pipeline.
 
 ```yaml title="task-fluxcd-repo-download.yaml"
 apiVersion: tekton.dev/v1beta1
@@ -65,6 +100,12 @@ spec:
 ```
 
 ### Maven TestContainers Task
+
+Below is a Task that supports a Maven build that requires a Docker daemon.
+
+One such type of build that requires a Docker daemon, is the use of TestContainers.
+
+TestContainers provides a build with ad-hoc creation of a Docker container required for tests, and then handles the cleanup as well.
 
 ```yaml title="task-maven-test-containers.yaml"
 apiVersion: tekton.dev/v1beta1
@@ -103,6 +144,8 @@ spec:
 ```
 
 ### Tekton Pipeline FluxCD Maven Test
+
+Here is the Pipeline that combines the two Tasks.
 
 ```yaml title="pipeline-fluxcd-maven-test.yaml"
 apiVersion: tekton.dev/v1beta1
@@ -149,6 +192,10 @@ spec:
 
 ### ClusterTemplate For New Pipeline
 
+A Tekton Pipeline needs to be triggered via a **PipelineRun**.
+
+In our Supply Chain, we use a **ClusterRunTemplate** to generate a **PipelineRun** with the appropriate parameters.
+
 ```yaml title="tekton-source-pipelinerun-workspace.yaml"
 apiVersion: carto.run/v1alpha1
 kind: ClusterRunTemplate
@@ -187,6 +234,10 @@ spec:
 
 ### Add New Components to the Cluster
 
+We can now add the resources to the cluster.
+
+The Tekton resources are namespaced, the Cartographer **ClusterRunTemplate**, as the name implies, is not.
+
 ```sh
 kubectl apply -f task-fluxcd-repo-download.yaml \
     -n ${TAP_DEVELOPER_NAMESPACE}
@@ -196,7 +247,6 @@ kubectl apply -f pipeline-fluxcd-maven-test.yaml \
         -n ${TAP_DEVELOPER_NAMESPACE}
 kubectl apply -f tekton-source-pipelinerun-workspace.yaml 
 ```
-
 
 !!! Danger "There Can Be Only One"
     Make sure there is one **Pipeline** with the label `apps.tanzu.vmware.com/pipeline=test`.
@@ -224,7 +274,6 @@ kubectl apply -f tekton-source-pipelinerun-workspace.yaml
     ```
 
 ### Copy Existing Supply Chain Components
-
 
 And then customize the **ClusterSourceTemplate** name `testing-pipeline` to use our new **ClusterRunTemplate** instead.
 

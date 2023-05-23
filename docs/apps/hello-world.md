@@ -1,11 +1,22 @@
 ---
-title: TAP Workload Demo
-description: TAP Demo App - Absolute minimal
+title: Workload from Self-hosted Git
+description: Create, onboard, and update a TAP Workload from a self-hosted Git Repository
 author: joostvdg
 tags: [tap, kubernetes, spring, java]
 ---
 
-Coming soon.
+In this workshop, we explore the creation, updating, and onboarding of a TAP Workload from a self-hosted Git server.
+
+## Requirements
+
+Before you can proceed with this workshop, ensure you have met the following requirements:
+
+* Kubernetes cluster with TAP installed
+* With one of the following TAP Profiles
+  * Full or Iterate (recommended), or a combination of View, Build & Run (and then manually copy the **Deliverable**)
+* Self-hosted Git server with TLS
+   * Ideally with the CA certificate on hand
+* SSH Key usable for the self-hosted Git server
 
 ## Checks
 
@@ -32,13 +43,22 @@ To add:
     * make the project public (should be the default)
 * Push project to Gitea
 * create secret for Gitea with Credentials & CA Cert
-    * https://fluxcd.io/flux/components/source/gitrepositories/
+
 * create workload
 * verify application runs
 * update TAP GUI config
     * to trust Gitea
 * register application in TAP GUI
 * view app resources in App Live View
+
+The workshop consists of the following steps:
+
+* Generate Application: to create the application source code to use for our Workload
+* Import the Application's source code into Gitea
+* Onboard the Application into TAP
+* View the Application's Supply Chain in TAP GUI
+* Register the Appliction in TAP GUI
+* View Application's live resources in App Live View (part of TAP)
 
 ## Generate Project
 
@@ -74,7 +94,6 @@ Wait a few seconds, and the click `DOWNLOAD ZIP FILE`.
 export APP_NAME=
 export LAB=
 ```
-
 
 Then SCP the Zip to your Lab:
 
@@ -134,6 +153,13 @@ tap-demo-04
                         └── HelloControllerTest.java
 ```
 
+!!! Tip "Use IDE Plugins"
+
+    TAP also has an IDE plugin for VSCode and Jetbrain's IDE's.
+    When this plugin is connected to a TAP GUI, you can create a new Accelerator based Application directly from your IDE.
+
+    TODO: add link
+
 ## Import into Gitea
 
 Before we can push our newly created Project to Gitea, we need a repository in Gitea.
@@ -159,8 +185,15 @@ curl -k -X POST "https://gitea.services.h2o-2-9349.h2o.vmware.com/api/v1/user/re
 
 ### Push to Gitea
 
+Enter the directory of the application:
+
 ```sh
 cd $APP_NAME
+```
+
+And then run the following Git commands, to push the branch to Gitea.
+
+```sh
 git init
 git add .
 git commit -m "first commit"
@@ -313,9 +346,11 @@ Open up the Workload definition:
 vim config/workload.yaml
 ```
 
-Replace the URL placeholder with your HTTPS or SSH URLs.
+!!! Warning "Replace URL Placeholder"
 
-And add a parameter for the Secret: `gitops_ssh_secret`:
+    Replace the URL placeholder values, with your HTTPS or SSH URLs.
+
+Add a parameter for the Secret: `gitops_ssh_secret`:
 
 ```sh
   - name: gitops_ssh_secret
@@ -323,17 +358,18 @@ And add a parameter for the Secret: `gitops_ssh_secret`:
 ```
 
 ??? Example "Full Example"
+    This a full example of a `workload.yaml` after the changes.
 
     ```yaml title="config/workload.yaml"
     apiVersion: carto.run/v1alpha1
     kind: Workload
     metadata:
-      name: tap-demo-04
+      name: YOUR_APP
       labels:
         apps.tanzu.vmware.com/workload-type: web
         apps.tanzu.vmware.com/has-tests: "true"
         apps.tanzu.vmware.com/auto-configure-actuators: "true"
-        app.kubernetes.io/part-of: tap-demo-04
+        app.kubernetes.io/part-of: YOUR_APP
     spec:
       build:
         env:
@@ -347,7 +383,7 @@ And add a parameter for the Secret: `gitops_ssh_secret`:
           autoscaling.knative.dev/minScale: "1"
       source:
         git:
-          url: ssh://git@gitssh.h2o-2-9349.h2o.vmware.com/lab02/tap-demo-04.git
+          url: ssh://git@gitssh.h2o-2-9349.h2o.vmware.com/YOUR_LAB/YOUR_APP.git
           ref:
             branch: main
     ```
@@ -359,27 +395,39 @@ kubectl apply -f config/workload.yaml \
 
 ### Verify Workload
 
+Verify the Workload exists and is valid.
+
 ```sh
 kubectl get workload -n ${TAP_DEVELOPER_NAMESPACE}
 ```
+
+Verify if FluxCD can checkout your application's source from Gitea.
 
 ```sh
 kubectl get GitRepository -n ${TAP_DEVELOPER_NAMESPACE}
 ```
 
+Verify if your Workload is targeting a valid Supply Chain.
+
 ```sh
 tanzu apps workload get ${APP_NAME} -n ${TAP_DEVELOPER_NAMESPACE}
 ```
 
+Tail the logs:
+
 ```sh
 tanzu apps workload tail ${APP_NAME} -n ${TAP_DEVELOPER_NAMESPACE} --timestamp --since 1h
 ```
+
+And last but not least, once the Supply Chain completes, retrieve its HTTPProxy:
 
 ```sh
 kubectl get httpproxy \
   -n ${TAP_DEVELOPER_NAMESPACE} \
   -l contour.networking.knative.dev/parent=${APP_NAME}
 ```
+
+It will have four proxy entries, select the one with the external DNS name and save it:
 
 ```sh
 export URL=
@@ -397,7 +445,7 @@ Which should respond with:
 Greetings from Spring Boot + Tanzu!
 ```
 
-### Update Workload
+## Update Workload
 
 Let's test the update of the Workload.
 
@@ -450,19 +498,30 @@ Which should now return (or your message):
 Greetings from Barcelona!
 ```
 
-### Update Profile
+## View App Supply Chain
+
+Open the TAP GUI and visit the Supply Chain screen.
+
+You should be able to see your application listed there.
+
+If we want to see more of the application's resources, such as its (runtime) Deployment, we need to register the application.
+
+## Register Application in TAP GUI
 
 Before we can register our application in the TAP GUI, we need to make TAP GUI trust our Gitea server.
 
+We do this by updating the TAP Profile intallation values.
+
+We will do the following steps:
+
+* Update TAP GUI Config / TAP install
+* Register Application in TAP GUI
+* View Workload in App Live View (part of TAP GUI)
+
+### Update Profile
+
 We do this by updating the TAP GUI configuration in our profile.
 Either change the `ytt` template, or edit the `tap-values-full.yml` file directly.
-
-* Open TAP GUI
-* View Workload's Supply Chain
-* Update TAP GUI Config / TAP install
-* Register Application
-* View Workload in App Live View
-* Point to Hello Workload for managing an App with updates to source code (via Gitea)
 
 
 === "Directly"

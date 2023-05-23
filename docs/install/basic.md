@@ -74,16 +74,6 @@ The [prerequisites](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform
 * Jump Host or other machine with the required tools in place
 * Relocate TAP Images to local Container Image Registry
 
-### Required Tools
-
-* kubectl
-* yq
-* jq
-* Tanzu CLI
-    * with TAP plugins
-* curl
-* ...?
-
 ### Suitable Kubernetes clusters
 
 TAP 1.5 [supports Kubernetes 1.24, 1.25 and 1.26](https://docs.vmware.com/en/VMware-Tanzu-Application-Platform/1.5/tap/prerequisites.html#kubernetes-cluster-requirements-3)[^2].

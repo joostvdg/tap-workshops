@@ -4,26 +4,33 @@ hide:
 - toc
 ---
 
+# TAP Workshop
+
 Welcome.
 
-For the Tanzu Solution Engineer workshops, [visit the E2E Demo Portal](https://portal.end2end.link/).
+## Lab Exercises
+
+1. [TAP Install - Full Profile & OOTB Basic Supply Chain](/tap-workshops/install/basic)
+1. [Hello World++ Workload](/tap-workshops/apps/hello-world/)
+1. [Create Custom Supply Chain](/tap-workshops/supply-chain/custom/)
+1. [Upgrade OOTB Basic Supply Chain to OOTB Testing & Scanning](/tap-workshops/supply-chain/basic-to-test-scan/)
+1. [Leverage External Services for your Workload](/tap-workshops/apps/external-service/)
+
+There are more guided workshop materials out there, for example the Tanzu Solution Engineer workshops, [visit the E2E Demo Portal](https://portal.end2end.link/).
 
 ## DockerHub Proxy
 
-* In Harbor -> `harbor.services.h2o-2-9349.h2o.vmware.com/dockerhub/`
+We have a DockerHub Proxy repository setup in the local Harbor instance.
 
-So instead of `alpine` -> `harbor.services.h2o-2-9349.h2o.vmware.com/dockerhub/library/alpine`
+This Proxy repository is logged in, and thus helps you prevent DockerHub's Rate Limits.
+
+The project in Harbor is `dockerhub`, or `harbor.services.h2o-2-9349.h2o.vmware.com/dockerhub/` in full.
+
+So instead of `alpine`, you would use `harbor.services.h2o-2-9349.h2o.vmware.com/dockerhub/library/alpine`
 
 ```sh
 docker pull harbor.services.h2o-2-9349.h2o.vmware.com/dockerhub/library/alpine
 ```
-## Labs
-
-1. [Full & OOTB Basic](/tap-workshops/install/basic)
-1. [Hello World++ Workload](/tap-workshops/apps/hello-world/)
-1. [Custom Supply Chain](/tap-workshops/supply-chain/custom/)
-1. [Upgrade OOTB Basic to OOTB Test & Scanning](/tap-workshops/supply-chain/basic-to-test-scan/)
-1. [External Services](/tap-workshops/apps/external-service/)
 
 ## Links
 

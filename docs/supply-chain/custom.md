@@ -18,8 +18,12 @@ tags: [tap, kubernetes, cartographer, tekton, supplychain]
 
 ## Goals & Outcomes
 
-* I've written and implemented my own Custom Supply Chain on a Cluster
-* ?
+* [ ] I have a basic understanding of Cartographer Supply Chain
+* [ ] I have a basic understanding of Tekton
+* [ ] I've written and implemented my own Tekton Task
+* [ ] I've written and implemented my own Tekton Pipeline
+* [ ] I've written and implemented my own Custom Supply Chain on a Cluster
+* [ ] I've written and implemented my own Custom Supply Chain on a Cluster, using Tekton
 
 ## Steps
 
