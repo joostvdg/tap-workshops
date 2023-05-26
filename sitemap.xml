@@ -2,87 +2,87 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/labs/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/apps/api/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/apps/external-service/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/apps/hello-world/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/apps/where-for-dinner/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/custom/accelerator/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/custom/tap-gui-auth/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/install/basic/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/install/gitops/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/install/mutlicluster/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/install/tap-gui-auth/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/jumphost/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/supply-chain/basic-to-test-scan/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/supply-chain/custom-notes/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/supply-chain/custom/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://joostvdg.github.io/tap-workshops/supply-chain/debug/</loc>
-         <lastmod>2023-05-23</lastmod>
+         <lastmod>2023-05-26</lastmod>
          <changefreq>daily</changefreq>
     </url>
 </urlset>
