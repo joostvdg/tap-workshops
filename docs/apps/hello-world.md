@@ -29,27 +29,9 @@ Before you can proceed with this workshop, ensure you have met the following req
 - [ ] I know how to configure an integration to a private Git provider in TAP GUI
 - [ ] I know how to configure access to private repositories (SCM and Container) for TAP Workloads
 - [ ] I have configured custom CA's for TAP
-
-To add:
-
 - [ ] I am able to view and verify results for the Security Analysis within TAP GUI
 
 ## Steps
-
-* go to TAP GUI -> Create | use VSCode Extention
-    * https://tap-gui.view.h2o-2-9349.h2o.vmware.com/create
-    * Tanzu Java Web UI
-* create project in Gitea
-    * make the project public (should be the default)
-* Push project to Gitea
-* create secret for Gitea with Credentials & CA Cert
-
-* create workload
-* verify application runs
-* update TAP GUI config
-    * to trust Gitea
-* register application in TAP GUI
-* view app resources in App Live View
 
 The workshop consists of the following steps:
 
@@ -94,6 +76,12 @@ Wait a few seconds, and the click `DOWNLOAD ZIP FILE`.
 export APP_NAME=
 export LAB=
 ```
+
+!!! Example
+    ```sh
+    export APP_NAME=my-app
+    export LAB=lab03
+    ```
 
 Then SCP the Zip to your Lab:
 
@@ -416,7 +404,8 @@ tanzu apps workload get ${APP_NAME} -n ${TAP_DEVELOPER_NAMESPACE}
 Tail the logs:
 
 ```sh
-tanzu apps workload tail ${APP_NAME} -n ${TAP_DEVELOPER_NAMESPACE} --timestamp --since 1h
+tanzu apps workload tail ${APP_NAME} -n ${TAP_DEVELOPER_NAMESPACE} \
+  --timestamp --since 1h
 ```
 
 And last but not least, once the Supply Chain completes, retrieve its HTTPProxy:
@@ -457,7 +446,13 @@ The place this line is written, is in the `HelloController`.
 
 The file resides here: `src/main/java/com/example/springboot/HelloController.java`.
 
-If we change it here, we must also change it in the test: `src/test/java/com/example/springboot/HelloControllerTest.java`.
+!!! Warning "Update Tests"
+    The application has some tests by default that verify the output of the Controller.
+    
+    When you chang ethe text from `Greetings from Spring Boot + Tanzu!`, the Test will fail.
+
+    Change it in the test file: `src/test/java/com/example/springboot/HelloControllerTest.java`.
+    There are two occurances in the Test file, so you need to change the text three times!
 
 Make sure all three occurances are the same.
 Either manually edit the files with **vim**, or use the **sed** command below:
@@ -524,8 +519,13 @@ We do this by updating the TAP GUI configuration in our profile.
 Either change the `ytt` template, or edit the `tap-values-full.yml` file directly.
 
 
+
 === "Directly"
     Add the `backend` and `integrations` segment to the `tap_gui.app_config` property, so that it looks like below.
+
+    !!! Warning
+        You have to merge the YAML from below with what is already there in the `tap_gui.app_config` value.
+
     ```yaml
     tap_gui:
       app_config:
@@ -651,7 +651,7 @@ Either change the `ytt` template, or edit the `tap-values-full.yml` file directl
     ```sh
     ytt -f full-profile.ytt.yaml \
       -v buildRegistry="$BUILD_REGISTRY" \
-      -v buildRegistrySecret="$BUILD_REGISTRY_SECRET" \
+      -v buildRegistrySecret="$TAP_BUILD_REGISTRY_SECRET" \
       -v buildRepo="$BUILD_REGISTRY_REPO" \
       -v tbsRepo="$TBS_REPO" \
       -v domainName="$DOMAIN_NAME" \

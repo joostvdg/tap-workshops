@@ -252,7 +252,7 @@ tanzu secret registry add ${TAP_INSTALL_REGISTRY_SECRET} \
     --yes 
 ```
 
-!!! Important "Registry Write Secret"
+!!! Warning "Additional Registry Write Secret Required!"
     TAP profiles `Iterate`, `Full`, and `Build`, also need a Registry ***write*** secret.
 
     This secret is used to write built images of the applications going throuhg the Supply Chains.
@@ -723,7 +723,7 @@ And then we run YTT to generate our Profile configuration file.
 ```sh
 ytt -f full-profile.ytt.yaml \
   -v buildRegistry="$BUILD_REGISTRY" \
-  -v buildRegistrySecret="$BUILD_REGISTRY_SECRET" \
+  -v buildRegistrySecret="$TAP_BUILD_REGISTRY_SECRET" \
   -v buildRepo="$BUILD_REGISTRY_REPO" \
   -v tbsRepo="$TBS_REPO" \
   -v domainName="$DOMAIN_NAME" \
@@ -1024,7 +1024,9 @@ We can then either use the CLI or the `Workload` CR to create our test workload.
 Use `kubectl wait` to wait for the app to be ready.
 
 ```sh
-kubectl wait --for=condition=Ready Workload tanzu-java-web-app --timeout=10m -n ${$TAP_DEVELOPER_NAMESPACE}
+kubectl wait --for=condition=Ready \
+  Workload tanzu-java-web-app --timeout=10m \
+  -n ${$TAP_DEVELOPER_NAMESPACE}
 ```
 
 ### Verify Workload

@@ -249,7 +249,7 @@ And then we run YTT to generate our Profile configuration file.
 ```sh
 ytt -f full-profile.ytt.yaml \
   -v buildRegistry="$BUILD_REGISTRY" \
-  -v buildRegistrySecret="$BUILD_REGISTRY_SECRET" \
+  -v buildRegistrySecret="$TAP_BUILD_REGISTRY_SECRET" \
   -v buildRepo="$BUILD_REGISTRY_REPO" \
   -v tbsRepo="$TBS_REPO" \
   -v domainName="$DOMAIN_NAME" \
@@ -773,7 +773,7 @@ And then we run YTT to generate our Profile configuration file.
 ```sh
 ytt -f full-profile.ytt.yaml \
   -v buildRegistry="$BUILD_REGISTRY" \
-  -v buildRegistrySecret="$BUILD_REGISTRY_SECRET" \
+  -v buildRegistrySecret="$TAP_BUILD_REGISTRY_SECRET" \
   -v buildRepo="$BUILD_REGISTRY_REPO" \
   -v tbsRepo="$TBS_REPO" \
   -v domainName="$DOMAIN_NAME" \
@@ -984,7 +984,7 @@ And then we run YTT to generate our Profile configuration file.
 ```sh
 ytt -f full-profile.ytt.yaml \
   -v buildRegistry="$BUILD_REGISTRY" \
-  -v buildRegistrySecret="$BUILD_REGISTRY_SECRET" \
+  -v buildRegistrySecret="$TAP_BUILD_REGISTRY_SECRET" \
   -v buildRepo="$BUILD_REGISTRY_REPO" \
   -v tbsRepo="$TBS_REPO" \
   -v domainName="$DOMAIN_NAME" \

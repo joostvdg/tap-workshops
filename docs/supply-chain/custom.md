@@ -5,16 +5,9 @@ author: joostvdg
 tags: [tap, kubernetes, cartographer, tekton, supplychain]
 ---
 
-## Questions
+This exercise teaches you to create a custom Cartographer Supply Chain.
 
-* FluxCD Webhook instead of Polling
-  * Polling must die
-* Git metadata (e.g., Git Webhook data)?
-* Other branches, tags, PRs?
-* Handle multiple commits to same revision in sequence?
-* Build caching?
-* Tekton GUI?
-* Carto Live Editor?
+We do so by introducing the Cartographer Supply Chain resources, then the Tekton resources, and then combining the two.
 
 ## Goals & Outcomes
 
@@ -49,7 +42,16 @@ And lastly, you should now be able to read and comprehend the OOTB Supply Chains
   * Full, Iterate, or Build
 * TAP Developer Namespace setup
   * for RBAC and Repository Credentials
-* Checkout this repository
+* Checkout this repository, to avoid having to create the files yourself
+  * The repository is in [GitHub.com/joostvdg/tap-workshops](https://github.com/joostvdg/tap-workshops)
+  ```sh
+  git clone https://github.com/joostvdg/tap-workshops.git
+  ```
+
+!!! Warning "Use Default Namespace"
+    This exercise is standalone and we recommend cleaning up the resources after you're done.
+
+    So we use the `default` Namespace for all resources here, to reduce typing and copy-pasting.
 
 ## Cartographer Introduction
 
@@ -290,26 +292,22 @@ Before we apply the resources to the cluster, we need to make sure our ServiceAc
 We should now have four files, which you can apply to the Cluster and the appropriate Namespace.
 
 ```sh
-export DEV_NAMESPACE=dev
-```
-
-```sh
-kubectl apply -f resources/cartographer/rbac.yaml -n ${DEV_NAMESPACE}
+kubectl apply -f resources/cartographer/rbac.yaml
 kubectl apply -f resources/cartographer/app-deploy-01/01-cluster-template.yaml
 kubectl apply -f resources/cartographer/app-deploy-01/02-supply-chain.yaml
-kuebctl apply -f resources/cartographer/app-deploy-01/03-workload.yaml -n ${DEV_NAMESPACE}
+kuebctl apply -f resources/cartographer/app-deploy-01/03-workload.yaml
 ```
 
 Once you have applied the resources, the workload should be valid:
 
 ```sh
-kubectl get workload -n $DEV_NAMESPACE
+kubectl get workload
 ```
 
 And if you have the `kubectl tree` plugin, you can see the related resources:
 
 ```sh
-kubectl tree workload hello -n ${DEV_NAMESPACE}
+kubectl tree workload hello
 ```
 
 Which should show something like this:
@@ -327,7 +325,7 @@ default        └─Pod/hello-deployment-cfdf74d6-x2pmc  True           98m
 To test the application, you can use `kubectl port-forward`:
 
 ```sh
-kubectl port-forward deployment/hello-deployment -n $DEV_NAMESPACE 8080:8080
+kubectl port-forward deployment/hello-deployment 8080:8080
 ```
 
 And then Curl:
@@ -526,29 +524,25 @@ params:
 
 ### Excercise 2
 
-```sh
-export DEV_NAMESPACE=dev
-```
-
 Technically, we do not have to update the RBAC configuration, but its included for completeness.
 
 ```sh
-kubectl apply -f resources/cartographer/rbac.yaml -n ${DEV_NAMESPACE}
+kubectl apply -f resources/cartographer/rbac.yaml
 kubectl apply -f resources/cartographer/app-deploy-02/01-cluster-template.yaml
 kubectl apply -f resources/cartographer/app-deploy-02/02-supply-chain.yaml
-kubectl apply -f resources/cartographer/app-deploy-02/03-workload.yaml  -n ${DEV_NAMESPACE}
+kubectl apply -f resources/cartographer/app-deploy-02/03-workload.yaml
 ```
 
 Once you have applied the resources, the workload should be valid:
 
 ```sh
-kubectl get workload -n $DEV_NAMESPACE
+kubectl get workload
 ```
 
 To test the application, you can use `kubectl port-forward`:
 
 ```sh
-kubectl port-forward deployment/hello-02-deployment -n $DEV_NAMESPACE 8080:8080
+kubectl port-forward deployment/hello-02-deployment 8080:8080
 ```
 
 And then Curl:
@@ -591,7 +585,6 @@ One such tool, which matches really well with Cartographer, is [KPack](https://b
     kind: Image
     metadata:
       name: example-image
-      namespace: default
     spec:
       tag: <DOCKER-IMAGE-TAG>
       serviceAccount: <SERVICE-ACCOUNT>
@@ -822,7 +815,7 @@ In case you don't remember, we assumed it would be defined within `images.built-
 You can see below how we can express that.
 We add the `images` list, and link it to the output `built-image` from the ***Resource*** `build-image`.
 
-The Resource `build-image` is the _Resource_ name of our **ClusterImageTemplate**. 
+The Resource `build-image` is the _Resource_ name of our **ClusterImageTemplate**.
 
 ```yaml
 - name: deploy
@@ -859,7 +852,7 @@ Below is the complete updated Supply Chain.
 
       serviceAccountRef:
         name: cartographer-from-source-sa
-        namespace: dev
+        namespace: default
 
       selector:
         workload-type: source-code-01
@@ -905,17 +898,13 @@ Below is the complete updated Workload manifest:
 
 ### Excercise 3
 
-```sh
-export DEV_NAMESPACE=dev
-```
-
 We can now apply all the Resources to the Cluster:
 
 ```sh
-kubectl apply -f resources/cartographer/app-deploy-03/00-rbac.yaml -n ${DEV_NAMESPACE}
+kubectl apply -f resources/cartographer/app-deploy-03/00-rbac.yaml
 kubectl apply -f resources/cartographer/app-deploy-03/01-cluster-template.yaml
 kubectl apply -f resources/cartographer/app-deploy-03/02-supply-chain.yaml
-kubectl apply -f resources/cartographer/app-deploy-03/03-workload.yaml  -n ${DEV_NAMESPACE}
+kubectl apply -f resources/cartographer/app-deploy-03/03-workload.yaml
 ```
 
 !!! Info
@@ -925,19 +914,19 @@ kubectl apply -f resources/cartographer/app-deploy-03/03-workload.yaml  -n ${DEV
 Once you have applied the resources, the workload should be valid:
 
 ```sh
-kubectl get workload -n $DEV_NAMESPACE
+kubectl get workload
 ```
 
 Because we're now doing a build, you might want to follow allong with the logs:
 
 ```sh
-tanzu apps workload tail source-code-01 --namespace dev --timestamp --since 1h
+tanzu apps workload tail source-code-01 --timestamp --since 1h
 ```
 
 To test the application, you can use `kubectl port-forward`:
 
 ```sh
-kubectl port-forward deployment/source-code-01-deployment -n $DEV_NAMESPACE 8080:8080
+kubectl port-forward deployment/source-code-01-deployment 8080:8080
 ```
 
 And then Curl:
@@ -999,13 +988,13 @@ spec:
 You can add this to your cluster as follows:
 
 ```sh
-kubectl apply -f resources/tekton/task/01-task-hello.yaml -n $DEV_NAMESPACE
+kubectl apply -f resources/tekton/task/01-task-hello.yaml
 ```
 
 You can verify it exists, by running:
 
 ```sh
-kubectl get task -n $DEV_NAMESPACE
+kubectl get task
 ```
 
 Which returns something like this:
@@ -1038,13 +1027,13 @@ spec:
 We can add this to the cluster as follows:
 
 ```sh
-kubectl apply -f resources/tekton/task/02-task-run.yaml -n $DEV_NAMESPACE
+kubectl apply -f resources/tekton/task/02-task-run.yaml
 ```
 
 And then verify its status:
 
 ```sh
-kubectl get taskrun -n $DEV_NAMESPACE
+kubectl get taskrun
 ```
 
 Which initially returns this:
@@ -1065,7 +1054,7 @@ Because our TaskRun has a fixed name, we can loot at the Pod and request the log
 The container is named after the step, so our step `echo` becomes `step-echo`:
 
 ```sh
-kubectl -n ${DEV_NAMESPACE} logs hello-task-run-pod -c step-echo
+kubectl logs hello-task-run-pod -c step-echo
 ```
 
 Which should return the following:
@@ -1077,8 +1066,8 @@ Hello World
 Feel free to clean them up:
 
 ```sh
-kubectl delete -f resources/tekton/task/02-task-run.yaml -n $DEV_NAMESPACE
-kubectl delete -f resources/tekton/task/01-task-hello.yaml -n $DEV_NAMESPACE
+kubectl delete -f resources/tekton/task/02-task-run.yaml
+kubectl delete -f resources/tekton/task/01-task-hello.yaml
 ```
 
 Let us look at Pipeline and PipelineRun next.
@@ -1169,15 +1158,15 @@ spec:
 We can add our two Tasks and the Pipeline to the cluster, and Tekton verifies all Tasks are accounted for.
 
 ```sh
-kubectl apply -f resources/tekton/pipeline/01-task-hello.yaml -n $DEV_NAMESPACE
-kubectl apply -f resources/tekton/pipeline/02-task-goodbye.yaml -n $DEV_NAMESPACE
-kubectl apply -f resources/tekton/pipeline/03-pipeline.yaml -n $DEV_NAMESPACE
+kubectl apply -f resources/tekton/pipeline/01-task-hello.yaml
+kubectl apply -f resources/tekton/pipeline/02-task-goodbye.yaml
+kubectl apply -f resources/tekton/pipeline/03-pipeline.yaml
 ```
 
 And verify the Pipeline is healthy:
 
 ```sh
-kubectl get pipeline -n $DEV_NAMESPACE
+kubectl get pipeline
 ```
 
 Which should result in:
@@ -1213,14 +1202,13 @@ Let's apply this to the cluster, and initiate our first Pipeline ***Run***.
 
 ```sh
 kubectl apply \
-  -f resources/tekton/pipeline/04-pipeline-run-static.yaml \
-  -n $DEV_NAMESPACE
+  -f resources/tekton/pipeline/04-pipeline-run-static.yaml
 ```
 
 And verify the state:
 
 ```sh
-kubectl get pipelinerun -n $DEV_NAMESPACE
+kubectl get pipelinerun
 ```
 
 Which should yield something like this at first:
@@ -1240,7 +1228,7 @@ hello-goodbye-run              True        Succeeded   64s         45s
 And if we look for the TaskRuns:
 
 ```sh
-kubectl get taskrun -n $DEV_NAMESPACE
+kubectl get taskrun
 ```
 
 We should see the following
@@ -1272,13 +1260,13 @@ spec:
 We cannot apply this resource to the cluster, we have to use `kubectl create` instead (because of the `generatedName`):
 
 ```sh
-kubectl create -f  resources/tekton/pipeline/05-pipeline-run-dynamic.yaml -n $DEV_NAMESPACE
+kubectl create -f  resources/tekton/pipeline/05-pipeline-run-dynamic.yaml
 ```
 
 If we now look at the PipelineRun and TaskRuns:
 
 ```sh
-kubectl get taskrun,pipelinerun -n $DEV_NAMESPACE
+kubectl get taskrun,pipelinerun
 ```
 
 We get the following:
@@ -1314,8 +1302,7 @@ Which is included in the resources:
 
 ```sh
 kubectl apply \
-  -f resources/tekton/pipeline-w-workspace/02-task-git-clone-0.10.yaml \
-  -n $DEV_NAMESPACE
+  -f resources/tekton/pipeline-w-workspace/02-task-git-clone-0.10.yaml
 ```
 
 This Task let's us Clone a Git repository, with practically all common Git clone configuration options.
@@ -1362,7 +1349,7 @@ We'll need to supply those as well.
 Next up is a Task that uses this Git checkout, to determine the next Git tag (e.g., application's release version).
 
 ```sh
-kubectl apply -f resources/tekton/pipeline-w-workspace/01-task-git-next-tag.yaml -n $DEV_NAMESPACE
+kubectl apply -f resources/tekton/pipeline-w-workspace/01-task-git-next-tag.yaml
 ```
 
 This task also required a Workspace:
@@ -1452,8 +1439,7 @@ Apply the Pipeline to the cluster.
 
 ```sh
 kubectl apply \
-  -f resources/tekton/pipeline-w-workspace/03-pipeline.yaml \
-  -n $DEV_NAMESPACE
+  -f resources/tekton/pipeline-w-workspace/03-pipeline.yaml
 ```
 
 ??? Example "Complete Pipeline Example"
@@ -1598,36 +1584,31 @@ spec:
 
 ### Excercise 4
 
-```sh
-export DEV_NAMESPACE=dev
-```
-
 Just in case you haven't applied all files yet, here's the whole list again:
 
 ```sh
-kubectl apply -f resources/tekton/pipeline-w-workspace/02-task-git-clone-0.10.yaml -n $DEV_NAMESPACE
-kubectl apply -f resources/tekton/pipeline-w-workspace/01-task-git-next-tag.yaml -n $DEV_NAMESPACE
-kubectl apply -f resources/tekton/pipeline-w-workspace/03-pipeline.yaml -n $DEV_NAMESPACE
+kubectl apply -f resources/tekton/pipeline-w-workspace/02-task-git-clone-0.10.yaml
+kubectl apply -f resources/tekton/pipeline-w-workspace/01-task-git-next-tag.yaml
+kubectl apply -f resources/tekton/pipeline-w-workspace/03-pipeline.yaml
 ```
 
 Verify the Pipeline is valid, and then create the PipelineRun:
 
 ```sh
 kubectl create \
-  -f resources/tekton/pipeline-w-workspace/04-pipeline-run.yaml \
-  -n $DEV_NAMESPACE
+  -f resources/tekton/pipeline-w-workspace/04-pipeline-run.yaml
 ```
 
 Once created, you can verify the status:
 
 ```sh
-kubectl get taskrun,pipelinerun -n $DEV_NAMESPACE
+kubectl get taskrun,pipelinerun
 ```
 
 If you want the logs, you'll now have to find the appropriate Pod name, as its name is generated.
 
 ```sh
-kubectl get pod  -n ${DEV_NAMESPACE}
+kubectl get pod
 ```
 
 ```sh
@@ -1635,19 +1616,19 @@ POD_NAME=
 ```
 
 ```sh
-kubectl -n ${DEV_NAMESPACE} logs ${POD_NAME}
+kubectl logs ${POD_NAME}
 ```
 
 You can also use the (automatic) Labels to query them:
 
 ```sh
-kubectl get taskrun -n dev -l tekton.dev/task=git-next-tag
+kubectl get taskrun -l tekton.dev/task=git-next-tag
 ```
 
 And then you can find the output of the `Result` from the `git-next-tag` Task in its `status.taskResults` field:
 
 ```sh
-kubectl get taskrun -n dev \
+kubectl get taskrun \
   -l tekton.dev/task=git-next-tag -ojson \
   | jq '.items | map(.status.taskResults)'
 ```
@@ -2064,7 +2045,6 @@ The SA config itself has not changed.
 spec:
   serviceAccountRef:
     name: cartographer-from-source-sa
-    namespace: dev
 ```
 
 ??? Example "Complete Supply Chain"
@@ -2100,7 +2080,6 @@ spec:
 
       serviceAccountRef:
         name: cartographer-from-source-sa
-        namespace: dev
     ```
 
 
@@ -2141,28 +2120,24 @@ metadata:
 
 ### Exercise 5
 
-```sh
-export DEV_NAMESPACE=dev
-```
-
 Just in case you haven't applied all files yet, here's the whole list again:
 
 ```sh
-kubectl apply -f resources/cartographer/app-deploy-04/00-rbac.yaml -n $DEV_NAMESPACE
-kubectl apply -f resources/cartographer/app-deploy-04/01-tekton-task-git-clone-0.3.yaml -n $DEV_NAMESPACE
-kubectl apply -f resources/cartographer/app-deploy-04/01-tekton-task-markdown-lint-0.1.yaml -n $DEV_NAMESPACE
-kubectl apply -f resources/cartographer/app-deploy-04/02-tekton-pipeline-markdown-lint.yaml -n $DEV_NAMESPACE
+kubectl apply -f resources/cartographer/app-deploy-04/00-rbac.yaml
+kubectl apply -f resources/cartographer/app-deploy-04/01-tekton-task-git-clone-0.3.yaml
+kubectl apply -f resources/cartographer/app-deploy-04/01-tekton-task-markdown-lint-0.1.yaml
+kubectl apply -f resources/cartographer/app-deploy-04/02-tekton-pipeline-markdown-lint.yaml
 kubectl apply -f resources/cartographer/app-deploy-04/03-cluster-source-template.yaml
 kubectl apply -f resources/cartographer/app-deploy-04/04-cluster-template.yaml
 kubectl apply -f resources/cartographer/app-deploy-04/05-supply-chain.yaml
-kubectl apply -f resources/cartographer/app-deploy-04/06-workload.yaml -n $DEV_NAMESPACE
+kubectl apply -f resources/cartographer/app-deploy-04/06-workload.yaml
 ```
 
 Once created, you can verify the status:
 
 
 ```sh
-kubectl get workload -n $DEV_NAMESPACE
+kubectl get workload
 ```
 
 As there's a few things going on, we'll see the Workload have several different statusses.
@@ -2192,7 +2167,7 @@ hello-04         https://github.com/joostvdg/go-demo  source-code-supply-chain-0
 We can then also take a look at the Tekton resources:
 
 ```sh
-kubectl get taskrun,pipelinerun -n $DEV_NAMESPACE
+kubectl get taskrun,pipelinerun
 ```
 
 ```sh
@@ -2252,7 +2227,6 @@ For more details, see the commands from the previous Exercises.
             cd $(workspaces.output.path)
             wget -qO- $(params.source-url) | tar xvz -m
     ```
-
 
 ## References
 
